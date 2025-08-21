@@ -20,5 +20,17 @@ Read the full documentation at: [https://idealo.github.io/image-quality-assessme
 Image quality assessment is compatible with Python 3.6 and is distributed under the Apache 2.0 license. We welcome all kinds of contributions, especially new model architectures and/or hyperparameter combinations that improve the performance of the currently published models (see [Contribute](#contribute)).
 
 ## References
+
 [TensorFlow-Lite-implementation-of-Google-NIMA](https://github.com/SophieMBerger/TensorFlow-Lite-implementation-of-Google-NIMA)
+
 [image-quality-assessment](https://github.com/idealo/image-quality-assessment)
+
+## Issues Resolved
+
+### Compile Error: [clang: error: SDK does not contain 'libarclite' at the path](https://stackoverflow.com/questions/77139617/clang-error-sdk-does-not-contain-libarclite-at-the-path)
+
+The issue is with the minimum OS version on the Cocoapods project. Just go on your project navigator and select the pods project:
+
+Select all pods installed
+
+Change the iOS deployment target to at least iOS 13 or higher.
