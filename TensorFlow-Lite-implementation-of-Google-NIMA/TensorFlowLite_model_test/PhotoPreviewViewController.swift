@@ -53,10 +53,19 @@ class PhotoPreviewViewController: UIViewController {
         view.addSubview(scoreLabel)
         
         // Position score elements
-        let padding: CGFloat = 16
+        //let padding: CGFloat = 16
         let labelSize = CGSize(width: 120, height: 40)
-        scoreBackground.frame = CGRect(x: view.bounds.width - labelSize.width - padding,
-                                     y: view.safeAreaInsets.top + padding,
+        
+        // Calculate top offset considering Dynamic Island and nav bar
+        // Get top padding from window scene
+        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        let window = windowScene?.windows.first(where: { $0.isKeyWindow })
+        let topPadding = window?.safeAreaInsets.top ?? 0 // This includes Dynamic Island height
+        //let navHeight = navigationController?.navigationBar.frame.height ?? 0
+        let topOffset = topPadding //+ navHeight
+        
+        scoreBackground.frame = CGRect(x: view.bounds.width - labelSize.width,
+                                     y: topOffset,
                                      width: labelSize.width,
                                      height: labelSize.height)
         scoreLabel.frame = scoreBackground.frame

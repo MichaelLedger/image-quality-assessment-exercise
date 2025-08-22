@@ -11,6 +11,7 @@ import Firebase
 import FirebaseMLCommon
 import Photos
 import PhotosUI
+import Vision // For ImageAestheticsScoresObservation
 
 class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
     
@@ -21,6 +22,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     private var scoredPhotos: [ScoredPhoto] = []
     private var processingQueue = DispatchQueue(label: "com.app.imageScoring", qos: .userInitiated)
     private var lastProcessingTime: TimeInterval = 0
+    private let floatingButton = FloatingButton(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
     
     @IBOutlet private var meanLabel: UILabel!
     @IBOutlet private var aestheticLabel: UILabel!
@@ -163,17 +165,24 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         picker.delegate = self
         picker.dataSource = self
         
+        // Setup floating button
+        setupFloatingButton()
+        
+        //test
+        //ignore local images for now
         // Add local images to selectedPhotos
-        for imageName in imageNamesArray {
-            let photo = SelectedPhoto(
-                assetIdentifier: nil,
-                localImageName: imageName,
-                creationDate: Date(),  // Use current date for local images
-                modificationDate: nil,
-                score: nil
-            )
-            selectedPhotos.append(photo)
-        }
+        /*
+         for imageName in imageNamesArray {
+         let photo = SelectedPhoto(
+         assetIdentifier: nil,
+         localImageName: imageName,
+         creationDate: Date(),  // Use current date for local images
+         modificationDate: Date(),
+         score: nil
+         )
+         selectedPhotos.append(photo)
+         }
+         */
         
         // Fetch recent photos if authorized
         checkPhotoLibraryAuthorizationAndFetchPhotos()
@@ -512,36 +521,30 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     @objc private func showScoredPhotosButtonTapped() {
-        // Show loading indicator
-        let loadingAlert = UIAlertController(
-            title: "Processing Photos",
-            message: "Analyzing selected photos...",
-            preferredStyle: .alert
-        )
-        present(loadingAlert, animated: true)
-        
-        self.processingQueue.async{ [weak self] in
+        self.scoreAllSelectedPhotos { [weak self] in
             guard let self else {return}
-            self.scoreAllSelectedPhotos { [weak self] in
-                guard let self else {return}
-                // Dismiss loading and show collection
-                loadingAlert.dismiss(animated: true) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                // Show processing time alert
+                let timeAlert = UIAlertController(
+                    title: "Analysis Complete",
+                    message: "Analyzed \(self.selectedPhotos.count) photos\nProcessing time: \(String(format: "%.2f", self.lastProcessingTime)) seconds",
+                    preferredStyle: .alert
+                )
+                timeAlert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                    // Dismiss loading and show collection
                     let photoCollectionVC = PhotoCollectionViewController()
+                    self.syncScoredPhoto()
                     photoCollectionVC.photos = self.scoredPhotos
                     self.navigationController?.pushViewController(photoCollectionVC, animated: true)
-                }
+                })
+                self.present(timeAlert, animated: true)
             }
         }
     }
     
-    @objc private func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
-        // Process all selected photos
-        let startTime = Date()
-        let group = DispatchGroup()
+    @objc private func syncScoredPhoto() {
         var newScoredPhotos: [ScoredPhoto] = []
         for photo in self.selectedPhotos {
-            group.enter()
-            
             // check if photos scored in finding best photo
             if let scoredPhoto = self.selectedPhotos.first(where: { selected in
                 selected.assetIdentifier == photo.assetIdentifier &&
@@ -550,147 +553,198 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             }), let score = scoredPhoto.score {
                 let scoredPhoto = ScoredPhoto(
                     assetIdentifier: photo.assetIdentifier,
-                    localImageName: nil,
+                    localImageName: photo.localImageName,
                     modificationDate: photo.modificationDate,
                     score: score
                 )
                 newScoredPhotos.append(scoredPhoto)
-                group.leave()
                 continue
             }
-            
-            // Check if photo was already scored (by modification date)
-            if let existingScore = self.scoredPhotos.first(where: { scored in
-                scored.assetIdentifier == photo.assetIdentifier &&
-                scored.modificationDate == photo.modificationDate
-            }) {
-                newScoredPhotos.append(existingScore)
-                group.leave()
-                continue
-            }
-            
-            // Score the image
-            self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-                var aestheticScore = 0.0
-                var technicalScore = 0.0
+        }
+        self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
+    }
+    
+    @objc private func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
+        // Show loading indicator
+        let loadingAlert = UIAlertController(
+            title: "Processing Photos",
+            message: "Analyzing with NIMA...",
+            preferredStyle: .alert
+        )
+        self.present(loadingAlert, animated: true)
+        processingQueue.async {
+            // Process all selected photos
+            let startTime = Date()
+            let group = DispatchGroup()
+            var newScoredPhotos: [ScoredPhoto] = []
+            for photo in self.selectedPhotos {
+                group.enter()
                 
-                if error == nil, let outputs = outputs,
-                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-                    let probabilities = output[0]
-                    for value in probabilities {
-                        guard let index = probabilities.firstIndex(of: value) else { continue }
-                        aestheticScore += Double(truncating: value) * Double(index + 1)
+                // check if photos scored in finding best photo
+                if let scoredPhoto = self.selectedPhotos.first(where: { selected in
+                    selected.assetIdentifier == photo.assetIdentifier &&
+                    selected.modificationDate == photo.modificationDate &&
+                    selected.score != nil
+                }), let score = scoredPhoto.score, score > 0 {
+                    let scoredPhoto = ScoredPhoto(
+                        assetIdentifier: photo.assetIdentifier,
+                        localImageName: photo.localImageName,
+                        modificationDate: photo.modificationDate,
+                        score: score
+                    )
+                    newScoredPhotos.append(scoredPhoto)
+                    group.leave()
+                    continue
+                }
+                
+                // Check if photo was already scored (by modification date)
+                //            if let existingScore = self.scoredPhotos.first(where: { scored in
+                //                scored.assetIdentifier == photo.assetIdentifier &&
+                //                scored.modificationDate == photo.modificationDate
+                //            }) {
+                //                newScoredPhotos.append(existingScore)
+                //                group.leave()
+                //                continue
+                //            }
+                
+                photo.loadImage { imageResult in
+                    // Prepare and score local image
+                    guard let image = imageResult,
+                          let cgImage = image.cgImage,
+                          let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
+                        group.leave()
+                        return
                     }
                     
-                    // Run technical model
-                    self.technicalInterpreter.run(inputs: self.inputs, options: self.ioOptions) { outputs, error in
+                    // Score the image
+                    self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                        var aestheticScore = 0.0
+                        var technicalScore = 0.0
+                        
                         if error == nil, let outputs = outputs,
                            let output = try? outputs.output(index: 0) as? [[NSNumber]] {
                             let probabilities = output[0]
                             for value in probabilities {
                                 guard let index = probabilities.firstIndex(of: value) else { continue }
-                                technicalScore += Double(truncating: value) * Double(index + 1)
+                                aestheticScore += Double(truncating: value) * Double(index + 1)
                             }
                             
-                            let meanScore = (aestheticScore + technicalScore) / 2
-                            
-                            // Update selected photo score
-                            if photo.assetIdentifier != nil {
-                                if let index = self.selectedPhotos.firstIndex(where: { $0.assetIdentifier == photo.assetIdentifier }) {
-                                    var updatedPhoto = self.selectedPhotos[index]
-                                    updatedPhoto.updateScore(meanScore)
-                                    self.selectedPhotos[index] = updatedPhoto
+                            // Run technical model
+                            self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                                if error == nil, let outputs = outputs,
+                                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                                    let probabilities = output[0]
+                                    for value in probabilities {
+                                        guard let index = probabilities.firstIndex(of: value) else { continue }
+                                        technicalScore += Double(truncating: value) * Double(index + 1)
+                                    }
+                                    
+                                    let meanScore = (aestheticScore + technicalScore) / 2
+                                    
+                                    // Update selected photo score
+                                    if photo.assetIdentifier != nil {
+                                        if let index = self.selectedPhotos.firstIndex(where: { $0.assetIdentifier == photo.assetIdentifier }) {
+                                            var updatedPhoto = self.selectedPhotos[index]
+                                            updatedPhoto.updateScore(meanScore)
+                                            self.selectedPhotos[index] = updatedPhoto
+                                        }
+                                    } else if photo.localImageName != nil {
+                                        if let index = self.selectedPhotos.firstIndex(where: { $0.localImageName == photo.localImageName }) {
+                                            var updatedPhoto = self.selectedPhotos[index]
+                                            updatedPhoto.updateScore(meanScore)
+                                            self.selectedPhotos[index] = updatedPhoto
+                                        }
+                                    }
+                                    
+                                    // Create scored photo
+                                    let scoredPhoto = ScoredPhoto(
+                                        assetIdentifier: photo.assetIdentifier,
+                                        localImageName: photo.localImageName,
+                                        modificationDate: photo.modificationDate,
+                                        score: meanScore
+                                    )
+                                    newScoredPhotos.append(scoredPhoto)
+                                } else {
+                                    print("Technical model error: \(error?.localizedDescription ?? "unknown error")")
                                 }
-                            } else if photo.localImageName != nil {
-                                if let index = self.selectedPhotos.firstIndex(where: { $0.localImageName == photo.localImageName }) {
-                                    var updatedPhoto = self.selectedPhotos[index]
-                                    updatedPhoto.updateScore(meanScore)
-                                    self.selectedPhotos[index] = updatedPhoto
-                                }
+                                group.leave()
                             }
-                            
-                            // Create scored photo
-                            let scoredPhoto = ScoredPhoto(
-                                assetIdentifier: photo.assetIdentifier,
-                                localImageName: nil,
-                                modificationDate: photo.modificationDate,
-                                score: meanScore
-                            )
-                            newScoredPhotos.append(scoredPhoto)
+                        } else {
+                            group.leave()
                         }
-                        group.leave()
                     }
-                } else {
-                    group.leave()
                 }
             }
-        }
-        
-        // Process local images from bundle if not already scored
-        for imageName in self.imageNamesArray {
-            group.enter()
             
-            // Check if image was already scored
-            if let existingScore = self.scoredPhotos.first(where: { $0.localImageName == imageName }) {
-                newScoredPhotos.append(existingScore)
-                group.leave()
-                continue
-            }
+            /*
+             // Process local images from bundle if not already scored
+             for imageName in self.imageNamesArray {
+             group.enter()
+             
+             // Check if image was already scored
+             if let existingScore = self.scoredPhotos.first(where: { $0.localImageName == imageName }) {
+             newScoredPhotos.append(existingScore)
+             group.leave()
+             continue
+             }
+             
+             // Prepare and score local image
+             guard let image = UIImage(named: imageName),
+             let cgImage = image.cgImage,
+             let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
+             group.leave()
+             continue
+             }
+             
+             self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+             var aestheticScore = 0.0
+             var technicalScore = 0.0
+             
+             if error == nil, let outputs = outputs,
+             let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+             let probabilities = output[0]
+             for value in probabilities {
+             guard let index = probabilities.firstIndex(of: value) else { continue }
+             aestheticScore += Double(truncating: value) * Double(index + 1)
+             }
+             
+             self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+             if error == nil, let outputs = outputs,
+             let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+             let probabilities = output[0]
+             for value in probabilities {
+             guard let index = probabilities.firstIndex(of: value) else { continue }
+             technicalScore += Double(truncating: value) * Double(index + 1)
+             }
+             
+             let meanScore = (aestheticScore + technicalScore) / 2
+             
+             // Create scored photo
+             let scoredPhoto = ScoredPhoto(
+             assetIdentifier: nil,
+             localImageName: imageName,
+             modificationDate: Date(),
+             score: meanScore
+             )
+             newScoredPhotos.append(scoredPhoto)
+             }
+             group.leave()
+             }
+             } else {
+             group.leave()
+             }
+             }
+             }
+             */
             
-            // Prepare and score local image
-            guard let image = UIImage(named: imageName),
-                  let cgImage = image.cgImage,
-                  let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
-                group.leave()
-                continue
-            }
-            
-            self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-                var aestheticScore = 0.0
-                var technicalScore = 0.0
-                
-                if error == nil, let outputs = outputs,
-                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-                    let probabilities = output[0]
-                    for value in probabilities {
-                        guard let index = probabilities.firstIndex(of: value) else { continue }
-                        aestheticScore += Double(truncating: value) * Double(index + 1)
-                    }
-                    
-                    self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-                        if error == nil, let outputs = outputs,
-                           let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-                            let probabilities = output[0]
-                            for value in probabilities {
-                                guard let index = probabilities.firstIndex(of: value) else { continue }
-                                technicalScore += Double(truncating: value) * Double(index + 1)
-                            }
-                            
-                            let meanScore = (aestheticScore + technicalScore) / 2
-                            
-                            // Create scored photo
-                            let scoredPhoto = ScoredPhoto(
-                                assetIdentifier: nil,
-                                localImageName: imageName,
-                                modificationDate: nil,
-                                score: meanScore
-                            )
-                            newScoredPhotos.append(scoredPhoto)
-                        }
-                        group.leave()
-                    }
-                } else {
-                    group.leave()
+            group.notify(queue: .main) {
+                // Update scored photos
+                self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
+                self.lastProcessingTime = Date().timeIntervalSince(startTime)
+                loadingAlert.dismiss(animated: true)
+                if let completion {
+                    completion()
                 }
-            }
-        }
-        
-        group.notify(queue: .main) {
-            // Update scored photos
-            self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
-            self.lastProcessingTime = Date().timeIntervalSince(startTime)
-            if let completion {
-                completion()
             }
         }
     }
@@ -726,8 +780,24 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         for photoIndex in selectedPhotos.indices {
             group.enter()
             
+            let currentPhoto = selectedPhotos[photoIndex]
+            
+            if let score = currentPhoto.score, score > 0 {
+                // Update best photo if score is higher
+                if score > highestScore {
+                    highestScore = score
+                    currentPhoto.loadImage { image in
+                        DispatchQueue.main.async {
+                            self.bestPhoto = (image: image, imageName: currentPhoto.localImageName, asset: nil, score: score)
+                        }
+                    }
+                }
+                group.leave()
+                continue
+            }
+            
             // Load and process photo
-            selectedPhotos[photoIndex].loadImage { [weak self] image in
+            currentPhoto.loadImage { [weak self] image in
                 guard let self = self,
                       let image = image,
                       let cgImage = image.cgImage else {
@@ -878,6 +948,156 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
+    private func setupFloatingButton() {
+        view.addSubview(floatingButton)
+        
+        // Position button in bottom-right corner
+        floatingButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            floatingButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            floatingButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            floatingButton.widthAnchor.constraint(equalToConstant: 50),
+            floatingButton.heightAnchor.constraint(equalToConstant: 50)
+        ])
+        
+        floatingButton.addTarget(self, action: #selector(floatingButtonTapped), for: .touchUpInside)
+    }
+    
+    @objc private func floatingButtonTapped() {
+        let alert = UIAlertController(
+            title: "Choose Scoring Algorithm",
+            message: "Select the algorithm to score your photos",
+            preferredStyle: .actionSheet
+        )
+        
+        // Add NIMA option
+        alert.addAction(UIAlertAction(title: "Aesthetic + Technical (NIMA)", style: .default) { [weak self] _ in
+            guard let self else { return }
+            //clear all scores in selectedPhotos
+            self.selectedPhotos = selectedPhotos.map { photo in
+                var updatedPhoto = photo
+                updatedPhoto.updateScore(nil, isUtility: photo.isUtility)
+                return updatedPhoto
+            }
+            self.scoreAllSelectedPhotos { [weak self] in
+                guard let self else {return}
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    // Show processing time alert
+                    let timeAlert = UIAlertController(
+                        title: "Analysis Complete",
+                        message: "Analyzed \(self.selectedPhotos.count) photos\nProcessing time: \(String(format: "%.2f", self.lastProcessingTime)) seconds",
+                        preferredStyle: .alert
+                    )
+                    timeAlert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        // Dismiss loading and show collection
+                        let photoCollectionVC = PhotoCollectionViewController()
+                        self.syncScoredPhoto()
+                        photoCollectionVC.photos = self.scoredPhotos
+                        self.navigationController?.pushViewController(photoCollectionVC, animated: true)
+                    })
+                    self.present(timeAlert, animated: true)
+                }
+            }
+        })
+        
+        // Add Vision option for iOS 18+
+        if #available(iOS 18.0, *) {
+            alert.addAction(UIAlertAction(title: "Vision Aesthetics", style: .default) { [weak self] _ in
+                self?.scoreWithVision()
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        // For iPad
+        if let popoverController = alert.popoverPresentationController {
+            popoverController.sourceView = floatingButton
+            popoverController.sourceRect = floatingButton.bounds
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    @available(iOS 18.0, *)
+    private func calculateAestheticsScore(image: UIImage) async throws -> ImageAestheticsScoresObservation? {
+        // Convert UIImage to CIImage
+        guard let ciImage = CIImage(image: image) else { return nil }
+        
+        // Set up the calculate image aesthetics scores request
+        let request = CalculateImageAestheticsScoresRequest()
+        
+        // Perform the request
+        return try await request.perform(on: ciImage)
+    }
+    
+    @available(iOS 18.0, *)
+    private func scoreWithVision() {
+        let loadingAlert = UIAlertController(
+            title: "Processing Photos",
+            message: "Analyzing with Vision framework...",
+            preferredStyle: .alert
+        )
+        present(loadingAlert, animated: true)
+        
+        let startTime = Date()
+        let group = DispatchGroup()
+        
+        for photoIndex in selectedPhotos.indices {
+            group.enter()
+            
+            selectedPhotos[photoIndex].loadImage { [weak self] image in
+                guard let self = self,
+                      let image = image else {
+                    group.leave()
+                    return
+                }
+                
+                Task {
+                    do {
+                        if let observation = try await self.calculateAestheticsScore(image: image) {
+                            // Convert score from -1...1 to 1...10 to match NIMA scale
+                            let normalizedScore = ((observation.overallScore + 1) / 2) * 9 + 1
+                            
+                            // Add utility info to picker display
+                            let isUtility = observation.isUtility
+                            DispatchQueue.main.async {
+                                self.selectedPhotos[photoIndex].updateScore(Double(normalizedScore), isUtility: isUtility)
+                            }
+                        }
+                    } catch {
+                        print("Vision analysis failed: \(error)")
+                    }
+                    group.leave()
+                }
+            }
+        }
+        
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            self.lastProcessingTime = Date().timeIntervalSince(startTime)
+            
+            loadingAlert.dismiss(animated: true) {
+                // Show completion alert
+                let alert = UIAlertController(
+                    title: "Analysis Complete",
+                    message: "Processed \(self.selectedPhotos.count) photos in \(String(format: "%.2f", self.lastProcessingTime)) seconds",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                    // Dismiss loading and show collection
+                    let photoCollectionVC = PhotoCollectionViewController()
+                    self.syncScoredPhoto()
+                    photoCollectionVC.photos = self.scoredPhotos
+                    self.navigationController?.pushViewController(photoCollectionVC, animated: true)
+                })
+                self.present(alert, animated: true)
+                
+                // Reload picker to show new scores
+                self.picker.reloadAllComponents()
+            }
+        }
+    }
+    
     private func showPhotoLibraryAccessAlert() {
         let alert = UIAlertController(
             title: "Photo Library Access Required",
@@ -967,7 +1187,7 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
         let photo = selectedPhotos[row]
         if let name = photo.localImageName, !name.isEmpty {
             if let score = photo.score {
-                return "\(name) (Score: \(String(format: "%.2f", score)))"
+                return "\(String(format: "%.2f", score)) \(name)"
             } else {
                 return name
             }
@@ -977,11 +1197,14 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
             formatter.dateStyle = .short
             formatter.timeStyle = .short
             let dateString = formatter.string(from: date)
+            var displayText = dateString
             if let score = photo.score {
-                return "\(dateString) (Score: \(String(format: "%.2f", score)))"
-            } else {
-                return dateString
+                displayText += " \(String(format: "%.2f", score))"
+                if let isUtility = photo.isUtility {
+                    displayText += isUtility ? " 📄" : " 📸"
+                }
             }
+            return displayText
         }
     }
     
