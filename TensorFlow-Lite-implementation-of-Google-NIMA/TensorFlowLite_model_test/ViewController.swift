@@ -15,9 +15,11 @@ import PhotosUI
 class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
     
     // Maximum number of recent photos to analyze
-    private let maxPhotoCount = 1000
-    private var selectedPhotos: [(image: UIImage, asset: PHAsset)] = []
+    private let maxPhotoCount = 50 //test 500
+    private var selectedPhotos: [SelectedPhoto] = []
     private var bestPhoto: (image: UIImage?, imageName: String?, asset: PHAsset?, score: Double)?
+    private var scoredPhotos: [ScoredPhoto] = []
+    private var processingQueue = DispatchQueue(label: "com.app.imageScoring", qos: .userInitiated)
     private var lastProcessingTime: TimeInterval = 0
     
     @IBOutlet private var meanLabel: UILabel!
@@ -25,7 +27,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     @IBOutlet private var technicalLabel: UILabel!
     @IBOutlet private var inputImageView: UIImageView!
     @IBOutlet private var picker: UIPickerView!
-    private var scoreRangeLabel: UILabel!
+    //private var scoreRangeLabel: UILabel!
     
     var aesthetic = 0.0
     var technical = 0.0
@@ -113,20 +115,20 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         super.viewDidLoad()
         
         // Setup score range label
-        scoreRangeLabel = UILabel()
-        scoreRangeLabel.translatesAutoresizingMaskIntoConstraints = false
-        scoreRangeLabel.textAlignment = .center
-        scoreRangeLabel.font = .systemFont(ofSize: 12, weight: .regular)
-        scoreRangeLabel.textColor = .gray
-        scoreRangeLabel.text = "Score Range: 1-10 (Higher is better)"
-        view.addSubview(scoreRangeLabel)
+        //        scoreRangeLabel = UILabel()
+        //        scoreRangeLabel.translatesAutoresizingMaskIntoConstraints = false
+        //        scoreRangeLabel.textAlignment = .center
+        //        scoreRangeLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        //        scoreRangeLabel.textColor = .gray
+        //        scoreRangeLabel.text = "Score Range: 1-10 (Higher is better)"
+        //        view.addSubview(scoreRangeLabel)
         
         // Add constraints for score range label
-        NSLayoutConstraint.activate([
-            scoreRangeLabel.topAnchor.constraint(equalTo: meanLabel.bottomAnchor, constant: 8),
-            scoreRangeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scoreRangeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+        //        NSLayoutConstraint.activate([
+        //            scoreRangeLabel.topAnchor.constraint(equalTo: meanLabel.bottomAnchor, constant: 8),
+        //            scoreRangeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+        //            scoreRangeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        //        ])
         
         // Add test photos button to navigation bar
         // Configure navigation bar buttons
@@ -136,28 +138,45 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             // Right button - Photo Library
             let photoImage = UIImage(systemName: "photo.on.rectangle", withConfiguration: config)
             let testPhotosButton = UIBarButtonItem(image: photoImage, style: .plain, target: self, action: #selector(testPhotosButtonTapped))
+            
             navigationItem.rightBarButtonItem = testPhotosButton
             
-            // Left button - Best Photo
+            // Left buttons
+            let gridImage = UIImage(systemName: "square.grid.3x3", withConfiguration: config)
+            let showGridButton = UIBarButtonItem(image: gridImage, style: .plain, target: self, action: #selector(showScoredPhotosButtonTapped))
+            
             let trophyImage = UIImage(systemName: "trophy", withConfiguration: config)
             let bestPhotoButton = UIBarButtonItem(image: trophyImage, style: .plain, target: self, action: #selector(findBestPhotoTapped))
-            navigationItem.leftBarButtonItem = bestPhotoButton
+            
+            navigationItem.leftBarButtonItems = [showGridButton, bestPhotoButton]
         } else {
             // Fallback for iOS 12 and earlier
             let testPhotosButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(testPhotosButtonTapped))
             navigationItem.rightBarButtonItem = testPhotosButton
             
+            // Left buttons for iOS 12
+            let showGridButton = UIBarButtonItem(title: "Grid", style: .plain, target: self, action: #selector(showScoredPhotosButtonTapped))
             let bestPhotoButton = UIBarButtonItem(title: "Best", style: .plain, target: self, action: #selector(findBestPhotoTapped))
-            navigationItem.leftBarButtonItem = bestPhotoButton
+            navigationItem.leftBarButtonItems = [showGridButton, bestPhotoButton]
         }
         
         picker.delegate = self
         picker.dataSource = self
         
+        // Add local images to selectedPhotos
+        for imageName in imageNamesArray {
+            let photo = SelectedPhoto(
+                assetIdentifier: nil,
+                localImageName: imageName,
+                creationDate: Date(),  // Use current date for local images
+                modificationDate: nil,
+                score: nil
+            )
+            selectedPhotos.append(photo)
+        }
+        
         // Fetch recent photos if authorized
         checkPhotoLibraryAuthorizationAndFetchPhotos()
-        
-        let inputImageTitle = imageNamesArray.first!
         
         aestheticInterpreter = ModelInterpreter.modelInterpreter(options: aestheticOptions)
         technicalInterpreter = ModelInterpreter.modelInterpreter(options: technicalOptions)
@@ -170,12 +189,32 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         } catch let error as NSError {
             print("Failed to set input or output format with error: \(error.localizedDescription)")
         }
-        
         self.ioOptions = ioOptions
-        guard let preparedInputs = prepareImage(fromBestScore: false, inputImageTitle: inputImageTitle) else { return }
-        inputs = preparedInputs
         
-        runModels(fromBestScore: false, nameOfInputImage: "", aestheticInterpreter: aestheticInterpreter, technicalInterpreter: technicalInterpreter, inputs: inputs, ioOptions: ioOptions, sender: nil)
+        // Load and process first image
+        if let firstPhoto = selectedPhotos.first {
+            firstPhoto.loadImage { [weak self] image in
+                guard let self = self,
+                      let image = image,
+                      let cgImage = image.cgImage else { return }
+                
+                DispatchQueue.main.async {
+                    self.inputImageView.image = image
+                    if let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
+                        self.inputs = preparedInputs
+                        self.runModels(
+                            fromBestScore: false,
+                            nameOfInputImage: firstPhoto.localImageName ?? "",
+                            aestheticInterpreter: self.aestheticInterpreter,
+                            technicalInterpreter: self.technicalInterpreter,
+                            inputs: preparedInputs,
+                            ioOptions: self.ioOptions,
+                            sender: nil
+                        )
+                    }
+                }
+            }
+        }
     }
     
     func prepareImage(fromBestScore: Bool, inputImageTitle: String? = nil, withCGImage: CGImage? = nil) -> ModelInputs? {
@@ -322,7 +361,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
         
         // Clear existing photos
-        selectedPhotos.removeAll()
+        //selectedPhotos.removeAll()
         
         // Create dispatch group to wait for all photos to be processed
         let group = DispatchGroup()
@@ -339,21 +378,12 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             options.resizeMode = .exact // Get the exact size we request
             // mnt/Dataset/anse_data/IQAdata/koniq-10k/512x384
             // Request a larger size for better quality
-            let targetSize = CGSize(width: 512, height: 512)//CGSize(width: 1024, height: 1024)
-            
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: targetSize,
-                contentMode: .aspectFit,
-                options: options
-            ) { image, info in
-                if let image = image {
-                    if image.size.width > 224 && image.size.height > 224 {// filter small images
-                        self.selectedPhotos.append((image: image, asset: asset))
-                    }
-                }
-                group.leave()
+            //let targetSize = CGSize(width: 512, height: 512)//CGSize(width: 1024, height: 1024)
+            // Check asset dimensions before adding
+            if asset.pixelWidth > 224 && asset.pixelHeight > 224 {
+                self.selectedPhotos.append(SelectedPhoto.fromAsset(asset))
             }
+            group.leave()
         }
         
         // Update UI when all photos are processed
@@ -361,17 +391,30 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             guard let self = self else { return }
             
             // Sort photos by creation date (most recent first)
-            self.selectedPhotos.sort { $0.asset.creationDate ?? Date() > $1.asset.creationDate ?? Date() }
+            self.selectedPhotos.sort { $0.creationDate ?? Date() > $1.creationDate ?? Date() }
             
             // Update picker
             self.picker.reloadAllComponents()
             
-            // Update initial image if we have photos
+            // Load initial image if we have photos
             if let firstPhoto = self.selectedPhotos.first {
-                self.inputImageView.image = firstPhoto.image
-                if let cgImage = firstPhoto.image.cgImage,
-                   let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
-                    self.runModels(fromBestScore: false, aestheticInterpreter: self.aestheticInterpreter, technicalInterpreter: self.technicalInterpreter, inputs: preparedInputs, ioOptions: self.ioOptions)
+                firstPhoto.loadImage { [weak self] image in
+                    guard let self = self,
+                          let image = image,
+                          let cgImage = image.cgImage else { return }
+                    
+                    DispatchQueue.main.async {
+                        self.inputImageView.image = image
+                        if let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
+                            self.runModels(
+                                fromBestScore: false,
+                                aestheticInterpreter: self.aestheticInterpreter,
+                                technicalInterpreter: self.technicalInterpreter,
+                                inputs: preparedInputs,
+                                ioOptions: self.ioOptions
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -403,7 +446,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     private func showImagePicker() {
         if #available(iOS 14, *) {
             var config = PHPickerConfiguration()
-            config.selectionLimit = 0  // 0 means no limit
+            config.selectionLimit = 1  // 0 means no limit
             config.filter = .images
             
             let picker = PHPickerViewController(configuration: config)
@@ -420,7 +463,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     private func showImagePickerWithLimitedAccess() {
         if #available(iOS 14, *) {
             var config = PHPickerConfiguration(photoLibrary: .shared())
-            config.selectionLimit = 0  // 0 means no limit
+            config.selectionLimit = 1  // 0 means no limit
             config.filter = .images
             config.preferredAssetRepresentationMode = .current
             
@@ -468,6 +511,190 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
+    @objc private func showScoredPhotosButtonTapped() {
+        // Show loading indicator
+        let loadingAlert = UIAlertController(
+            title: "Processing Photos",
+            message: "Analyzing selected photos...",
+            preferredStyle: .alert
+        )
+        present(loadingAlert, animated: true)
+        
+        self.processingQueue.async{ [weak self] in
+            guard let self else {return}
+            self.scoreAllSelectedPhotos { [weak self] in
+                guard let self else {return}
+                // Dismiss loading and show collection
+                loadingAlert.dismiss(animated: true) {
+                    let photoCollectionVC = PhotoCollectionViewController()
+                    photoCollectionVC.photos = self.scoredPhotos
+                    self.navigationController?.pushViewController(photoCollectionVC, animated: true)
+                }
+            }
+        }
+    }
+    
+    @objc private func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
+        // Process all selected photos
+        let startTime = Date()
+        let group = DispatchGroup()
+        var newScoredPhotos: [ScoredPhoto] = []
+        for photo in self.selectedPhotos {
+            group.enter()
+            
+            // check if photos scored in finding best photo
+            if let scoredPhoto = self.selectedPhotos.first(where: { selected in
+                selected.assetIdentifier == photo.assetIdentifier &&
+                selected.modificationDate == photo.modificationDate &&
+                selected.score != nil
+            }), let score = scoredPhoto.score {
+                let scoredPhoto = ScoredPhoto(
+                    assetIdentifier: photo.assetIdentifier,
+                    localImageName: nil,
+                    modificationDate: photo.modificationDate,
+                    score: score
+                )
+                newScoredPhotos.append(scoredPhoto)
+                group.leave()
+                continue
+            }
+            
+            // Check if photo was already scored (by modification date)
+            if let existingScore = self.scoredPhotos.first(where: { scored in
+                scored.assetIdentifier == photo.assetIdentifier &&
+                scored.modificationDate == photo.modificationDate
+            }) {
+                newScoredPhotos.append(existingScore)
+                group.leave()
+                continue
+            }
+            
+            // Score the image
+            self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                var aestheticScore = 0.0
+                var technicalScore = 0.0
+                
+                if error == nil, let outputs = outputs,
+                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                    let probabilities = output[0]
+                    for value in probabilities {
+                        guard let index = probabilities.firstIndex(of: value) else { continue }
+                        aestheticScore += Double(truncating: value) * Double(index + 1)
+                    }
+                    
+                    // Run technical model
+                    self.technicalInterpreter.run(inputs: self.inputs, options: self.ioOptions) { outputs, error in
+                        if error == nil, let outputs = outputs,
+                           let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                            let probabilities = output[0]
+                            for value in probabilities {
+                                guard let index = probabilities.firstIndex(of: value) else { continue }
+                                technicalScore += Double(truncating: value) * Double(index + 1)
+                            }
+                            
+                            let meanScore = (aestheticScore + technicalScore) / 2
+                            
+                            // Update selected photo score
+                            if photo.assetIdentifier != nil {
+                                if let index = self.selectedPhotos.firstIndex(where: { $0.assetIdentifier == photo.assetIdentifier }) {
+                                    var updatedPhoto = self.selectedPhotos[index]
+                                    updatedPhoto.updateScore(meanScore)
+                                    self.selectedPhotos[index] = updatedPhoto
+                                }
+                            } else if photo.localImageName != nil {
+                                if let index = self.selectedPhotos.firstIndex(where: { $0.localImageName == photo.localImageName }) {
+                                    var updatedPhoto = self.selectedPhotos[index]
+                                    updatedPhoto.updateScore(meanScore)
+                                    self.selectedPhotos[index] = updatedPhoto
+                                }
+                            }
+                            
+                            // Create scored photo
+                            let scoredPhoto = ScoredPhoto(
+                                assetIdentifier: photo.assetIdentifier,
+                                localImageName: nil,
+                                modificationDate: photo.modificationDate,
+                                score: meanScore
+                            )
+                            newScoredPhotos.append(scoredPhoto)
+                        }
+                        group.leave()
+                    }
+                } else {
+                    group.leave()
+                }
+            }
+        }
+        
+        // Process local images from bundle if not already scored
+        for imageName in self.imageNamesArray {
+            group.enter()
+            
+            // Check if image was already scored
+            if let existingScore = self.scoredPhotos.first(where: { $0.localImageName == imageName }) {
+                newScoredPhotos.append(existingScore)
+                group.leave()
+                continue
+            }
+            
+            // Prepare and score local image
+            guard let image = UIImage(named: imageName),
+                  let cgImage = image.cgImage,
+                  let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
+                group.leave()
+                continue
+            }
+            
+            self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                var aestheticScore = 0.0
+                var technicalScore = 0.0
+                
+                if error == nil, let outputs = outputs,
+                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                    let probabilities = output[0]
+                    for value in probabilities {
+                        guard let index = probabilities.firstIndex(of: value) else { continue }
+                        aestheticScore += Double(truncating: value) * Double(index + 1)
+                    }
+                    
+                    self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                        if error == nil, let outputs = outputs,
+                           let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                            let probabilities = output[0]
+                            for value in probabilities {
+                                guard let index = probabilities.firstIndex(of: value) else { continue }
+                                technicalScore += Double(truncating: value) * Double(index + 1)
+                            }
+                            
+                            let meanScore = (aestheticScore + technicalScore) / 2
+                            
+                            // Create scored photo
+                            let scoredPhoto = ScoredPhoto(
+                                assetIdentifier: nil,
+                                localImageName: imageName,
+                                modificationDate: nil,
+                                score: meanScore
+                            )
+                            newScoredPhotos.append(scoredPhoto)
+                        }
+                        group.leave()
+                    }
+                } else {
+                    group.leave()
+                }
+            }
+        }
+        
+        group.notify(queue: .main) {
+            // Update scored photos
+            self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
+            self.lastProcessingTime = Date().timeIntervalSince(startTime)
+            if let completion {
+                completion()
+            }
+        }
+    }
+    
     @objc private func findBestPhotoTapped() {
         guard !selectedPhotos.isEmpty else {
             // Show alert if no photos are available
@@ -496,13 +723,18 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         let group = DispatchGroup()
         
         // Process each photo
-        for photo in selectedPhotos {
+        for photoIndex in selectedPhotos.indices {
             group.enter()
             
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            // Load and process photo
+            selectedPhotos[photoIndex].loadImage { [weak self] image in
                 guard let self = self,
-                      let cgImage = photo.image.cgImage,
-                      let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
+                      let image = image,
+                      let cgImage = image.cgImage else {
+                    group.leave()
+                    return
+                }
+                guard let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
                     group.leave()
                     return
                 }
@@ -532,11 +764,16 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                                 
                                 let meanScore = (aestheticScore + technicalScore) / 2
                                 
+                                // Update score in the array
+                                DispatchQueue.main.async {
+                                    self.selectedPhotos[photoIndex].updateScore(meanScore)
+                                }
+                                
                                 // Update best photo if score is higher
                                 DispatchQueue.main.async {
                                     if meanScore > highestScore {
                                         highestScore = meanScore
-                                        self.bestPhoto = (image: photo.image, imageName: nil, asset: photo.asset, score: meanScore)
+                                        self.bestPhoto = (image: image, imageName: self.selectedPhotos[photoIndex].localImageName, asset: nil, score: meanScore)
                                     }
                                 }
                             }
@@ -566,23 +803,23 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 )
                 timeAlert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
                     // Show best photo in BestViewController after time alert is dismissed
-                    if let bestPhoto = self.bestPhoto {
-                    // Perform the segue to BestViewController
-                    self.performSegue(withIdentifier: "showBestSegue", sender: self)
-                } else {
-                    // Show error if no best photo found
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: """
+                    if let _ = self.bestPhoto {
+                        // Perform the segue to BestViewController
+                        self.performSegue(withIdentifier: "showBestSegue", sender: self)
+                    } else {
+                        // Show error if no best photo found
+                        let alert = UIAlertController(
+                            title: "Error",
+                            message: """
                         Could not determine the best photo. Please try again.
                         Attempted to analyze \(self.selectedPhotos.count) photos
                         Processing time: \(String(format: "%.2f", self.lastProcessingTime)) seconds
                         """,
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }})
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }})
                 self.present(timeAlert, animated: true)
             }
         }
@@ -671,7 +908,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         inputImageView.image = image
         
         // Create inputs for the model
-        let inputs = ModelInputs()
+        //let inputs = ModelInputs()
         guard let preparedInputs = prepareImage(fromBestScore: false, withCGImage: cgImage) else { return }
         
         // Run the models
@@ -728,21 +965,60 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
     
     func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? {
         let photo = selectedPhotos[row]
-        let date = photo.asset.creationDate ?? Date()
-        
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        if let name = photo.localImageName, !name.isEmpty {
+            if let score = photo.score {
+                return "\(name) (Score: \(String(format: "%.2f", score)))"
+            } else {
+                return name
+            }
+        } else {
+            let date = photo.creationDate ?? Date()
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            let dateString = formatter.string(from: date)
+            if let score = photo.score {
+                return "\(dateString) (Score: \(String(format: "%.2f", score)))"
+            } else {
+                return dateString
+            }
+        }
     }
     
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
         let photo = selectedPhotos[row]
-        inputImageView.image = photo.image
         
-        if let cgImage = photo.image.cgImage,
-           let preparedInputs = prepareImage(fromBestScore: false, withCGImage: cgImage) {
-            runModels(fromBestScore: false, aestheticInterpreter: aestheticInterpreter, technicalInterpreter: technicalInterpreter, inputs: preparedInputs, ioOptions: ioOptions)
+        // Show loading indicator
+        let activityIndicator = UIActivityIndicatorView(style: .medium)
+        activityIndicator.startAnimating()
+        inputImageView.addSubview(activityIndicator)
+        activityIndicator.center = inputImageView.center
+        
+        // Load image
+        photo.loadImage { [weak self] image in
+            guard let self = self,
+                  let image = image,
+                  let cgImage = image.cgImage else {
+                DispatchQueue.main.async {
+                    activityIndicator.removeFromSuperview()
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                activityIndicator.removeFromSuperview()
+                self.inputImageView.image = image
+                
+                if let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
+                    self.runModels(
+                        fromBestScore: false,
+                        aestheticInterpreter: self.aestheticInterpreter,
+                        technicalInterpreter: self.technicalInterpreter,
+                        inputs: preparedInputs,
+                        ioOptions: self.ioOptions
+                    )
+                }
+            }
         }
     }
     

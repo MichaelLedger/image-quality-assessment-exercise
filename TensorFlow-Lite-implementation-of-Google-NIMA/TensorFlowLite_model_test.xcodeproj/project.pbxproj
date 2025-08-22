@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		670907752E5849C400B7BDD9 /* PhotoCollectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907732E5849C400B7BDD9 /* PhotoCollectionViewController.swift */; };
+		670907762E5849C400B7BDD9 /* PhotoPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */; };
+		670907782E584CD500B7BDD9 /* ScoredPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907772E584CD500B7BDD9 /* ScoredPhoto.swift */; };
+		674A09FE2E58508F000BA288 /* SelectedPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A09FD2E58508F000BA288 /* SelectedPhoto.swift */; };
 		C22D6C5422DDF7DC00DD5625 /* BestViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */; };
 		C243011E22DDBB1800BD3807 /* aesthetic_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */; };
 		C243011F22DDBB1800BD3807 /* technical_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011D22DDBB1800BD3807 /* technical_model.tflite */; };
@@ -23,6 +27,10 @@
 /* Begin PBXFileReference section */
 		113C8DAB53AA52B733F6A23B /* Pods-TensorFlowLite_model_test.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TensorFlowLite_model_test.debug.xcconfig"; path = "Target Support Files/Pods-TensorFlowLite_model_test/Pods-TensorFlowLite_model_test.debug.xcconfig"; sourceTree = "<group>"; };
 		4BB83B44F323B764A52055D2 /* Pods-TensorFlowLite_model_test.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TensorFlowLite_model_test.release.xcconfig"; path = "Target Support Files/Pods-TensorFlowLite_model_test/Pods-TensorFlowLite_model_test.release.xcconfig"; sourceTree = "<group>"; };
+		670907732E5849C400B7BDD9 /* PhotoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCollectionViewController.swift; sourceTree = "<group>"; };
+		670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoPreviewViewController.swift; sourceTree = "<group>"; };
+		670907772E584CD500B7BDD9 /* ScoredPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoredPhoto.swift; sourceTree = "<group>"; };
+		674A09FD2E58508F000BA288 /* SelectedPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectedPhoto.swift; sourceTree = "<group>"; };
 		8510B6DCCC236CD8DAFA48A5 /* Pods_TensorFlowLite_model_test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TensorFlowLite_model_test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BestViewController.swift; sourceTree = "<group>"; };
 		C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = aesthetic_model.tflite; sourceTree = "<group>"; };
@@ -81,9 +89,13 @@
 		C2EF381222D8C85100C332BF /* TensorFlowLite_model_test */ = {
 			isa = PBXGroup;
 			children = (
+				674A09FD2E58508F000BA288 /* SelectedPhoto.swift */,
+				670907772E584CD500B7BDD9 /* ScoredPhoto.swift */,
 				C2EF381322D8C85100C332BF /* AppDelegate.swift */,
 				C2EF381522D8C85100C332BF /* ViewController.swift */,
 				C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */,
+				670907732E5849C400B7BDD9 /* PhotoCollectionViewController.swift */,
+				670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */,
 				C2EF381722D8C85100C332BF /* Main.storyboard */,
 				C2EF381A22D8C85200C332BF /* Assets.xcassets */,
 				C2EF381C22D8C85200C332BF /* LaunchScreen.storyboard */,
@@ -226,9 +238,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				674A09FE2E58508F000BA288 /* SelectedPhoto.swift in Sources */,
+				670907782E584CD500B7BDD9 /* ScoredPhoto.swift in Sources */,
 				C2EF381622D8C85100C332BF /* ViewController.swift in Sources */,
 				C22D6C5422DDF7DC00DD5625 /* BestViewController.swift in Sources */,
 				C2EF381422D8C85100C332BF /* AppDelegate.swift in Sources */,
+				670907752E5849C400B7BDD9 /* PhotoCollectionViewController.swift in Sources */,
+				670907762E5849C400B7BDD9 /* PhotoPreviewViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -378,7 +394,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = ZA2PCCN27W;
 				INFOPLIST_FILE = TensorFlowLite_model_test/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -398,7 +414,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = ZA2PCCN27W;
 				INFOPLIST_FILE = TensorFlowLite_model_test/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
