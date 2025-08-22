@@ -36,21 +36,38 @@ class BestViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        aestheticInterpreter = ModelInterpreter.modelInterpreter(options: viewController.aestheticOptions)
-        technicalInterpreter = ModelInterpreter.modelInterpreter(options: viewController.technicalOptions)
+        // Set navigation title
+        title = "Best Photo"
         
-        let ioOptions = ModelInputOutputOptions()
-        do {
-            try ioOptions.setInputFormat(index: 0, type: .float32, dimensions: [1, 224, 224, 3])
-            try ioOptions.setOutputFormat(index: 0, type: .float32, dimensions: [1, 10])
-        } catch let error as NSError {
-            print("Failed to set input or output format with error: \(error.localizedDescription)")
+        // Configure UI
+        bestMeanScoreLabel.textAlignment = .center
+        bestImageView.contentMode = .scaleAspectFit
+        bestImageView.clipsToBounds = true
+        
+        // Add share button
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .action,
+            target: self,
+            action: #selector(shareBestPhoto)
+        )
+    }
+    
+    @objc private func shareBestPhoto() {
+        guard let image = bestImageView.image else { return }
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [
+                image,
+                "Photo Score: \(String(format: "%.2f", bestMeanScore))"
+            ],
+            applicationActivities: nil
+        )
+        
+        // For iPad
+        if let popoverController = activityVC.popoverPresentationController {
+            popoverController.barButtonItem = navigationItem.rightBarButtonItem
         }
-
-        for name in viewController.imageNamesArray {
-            let inputs = viewController.prepareImage(fromBestScore: true, inputImageTitle: name)
-            viewController.runModels(fromBestScore: true, nameOfInputImage: name, aestheticInterpreter: aestheticInterpreter, technicalInterpreter: technicalInterpreter, inputs: inputs, ioOptions: ioOptions, sender: self)
-
-        }
+        
+        present(activityVC, animated: true)
     }
 }
