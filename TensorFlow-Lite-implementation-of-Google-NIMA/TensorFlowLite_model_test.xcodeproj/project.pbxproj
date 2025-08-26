@@ -12,6 +12,7 @@
 		670907782E584CD500B7BDD9 /* ScoredPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907772E584CD500B7BDD9 /* ScoredPhoto.swift */; };
 		674A09FE2E58508F000BA288 /* SelectedPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A09FD2E58508F000BA288 /* SelectedPhoto.swift */; };
 		674A0A2A2E586716000BA288 /* FloatingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A292E586716000BA288 /* FloatingButton.swift */; };
+		674A0A572E5C4DD8000BA288 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674A0A562E5C4DD8000BA288 /* Assets.xcassets */; };
 		C22D6C5422DDF7DC00DD5625 /* BestViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */; };
 		C243011E22DDBB1800BD3807 /* aesthetic_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */; };
 		C243011F22DDBB1800BD3807 /* technical_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011D22DDBB1800BD3807 /* technical_model.tflite */; };
@@ -20,7 +21,6 @@
 		C2EF381422D8C85100C332BF /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EF381322D8C85100C332BF /* AppDelegate.swift */; };
 		C2EF381622D8C85100C332BF /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2EF381522D8C85100C332BF /* ViewController.swift */; };
 		C2EF381922D8C85100C332BF /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C2EF381722D8C85100C332BF /* Main.storyboard */; };
-		C2EF381B22D8C85200C332BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C2EF381A22D8C85200C332BF /* Assets.xcassets */; };
 		C2EF381E22D8C85200C332BF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C2EF381C22D8C85200C332BF /* LaunchScreen.storyboard */; };
 		F9F28604FAB1B7266004E52D /* Pods_TensorFlowLite_model_test.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8510B6DCCC236CD8DAFA48A5 /* Pods_TensorFlowLite_model_test.framework */; };
 /* End PBXBuildFile section */
@@ -33,6 +33,7 @@
 		670907772E584CD500B7BDD9 /* ScoredPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoredPhoto.swift; sourceTree = "<group>"; };
 		674A09FD2E58508F000BA288 /* SelectedPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectedPhoto.swift; sourceTree = "<group>"; };
 		674A0A292E586716000BA288 /* FloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButton.swift; sourceTree = "<group>"; };
+		674A0A562E5C4DD8000BA288 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8510B6DCCC236CD8DAFA48A5 /* Pods_TensorFlowLite_model_test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TensorFlowLite_model_test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BestViewController.swift; sourceTree = "<group>"; };
 		C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = aesthetic_model.tflite; sourceTree = "<group>"; };
@@ -43,7 +44,7 @@
 		C2EF381322D8C85100C332BF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C2EF381522D8C85100C332BF /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		C2EF381822D8C85100C332BF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		C2EF381A22D8C85200C332BF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C2EF381A22D8C85200C332BF /* ExtraAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ExtraAssets.xcassets; sourceTree = "<group>"; };
 		C2EF381D22D8C85200C332BF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		C2EF381F22D8C85200C332BF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -100,7 +101,8 @@
 				670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */,
 				674A0A292E586716000BA288 /* FloatingButton.swift */,
 				C2EF381722D8C85100C332BF /* Main.storyboard */,
-				C2EF381A22D8C85200C332BF /* Assets.xcassets */,
+				674A0A562E5C4DD8000BA288 /* Assets.xcassets */,
+				C2EF381A22D8C85200C332BF /* ExtraAssets.xcassets */,
 				C2EF381C22D8C85200C332BF /* LaunchScreen.storyboard */,
 				C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */,
 				C243011D22DDBB1800BD3807 /* technical_model.tflite */,
@@ -183,7 +185,7 @@
 				C2C3293522DC6186003670F8 /* GoogleService-Info.plist in Resources */,
 				C243011E22DDBB1800BD3807 /* aesthetic_model.tflite in Resources */,
 				C243011F22DDBB1800BD3807 /* technical_model.tflite in Resources */,
-				C2EF381B22D8C85200C332BF /* Assets.xcassets in Resources */,
+				674A0A572E5C4DD8000BA288 /* Assets.xcassets in Resources */,
 				C2EF381922D8C85100C332BF /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -395,14 +397,18 @@
 			baseConfigurationReference = 113C8DAB53AA52B733F6A23B /* Pods-TensorFlowLite_model_test.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 88888;
 				DEVELOPMENT_TEAM = ZA2PCCN27W;
 				INFOPLIST_FILE = TensorFlowLite_model_test/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BestPhoto;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mountainxiang.test;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -415,14 +421,18 @@
 			baseConfigurationReference = 4BB83B44F323B764A52055D2 /* Pods-TensorFlowLite_model_test.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 88888;
 				DEVELOPMENT_TEAM = ZA2PCCN27W;
 				INFOPLIST_FILE = TensorFlowLite_model_test/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BestPhoto;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mountainxiang.test;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;

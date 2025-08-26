@@ -12,7 +12,6 @@ struct SelectedPhoto {
         let widthRatio = 224 / image.size.width
         let heightRatio = 224 / image.size.height
         let scale = max(widthRatio, heightRatio)
-        
         let newSize = CGSize(
             width: image.size.width * scale,
             height: image.size.height * scale
@@ -31,10 +30,15 @@ struct SelectedPhoto {
     let modificationDate: Date?
     private(set) var score: Double?
     private(set) var isUtility: Bool?
+    private(set) var label: String?
     
     mutating func updateScore(_ newScore: Double?, isUtility: Bool? = nil) {
         score = newScore
         self.isUtility = isUtility
+    }
+    
+    mutating func updateLabel(_ newLabel: String?) {
+        label = newLabel
     }
     
     static func fromAsset(_ asset: PHAsset) -> SelectedPhoto {
@@ -47,12 +51,13 @@ struct SelectedPhoto {
         )
     }
     
-    init(assetIdentifier: String? = nil, localImageName: String? = nil, creationDate: Date? = nil, modificationDate: Date? = nil, score: Double? = nil) {
+    init(assetIdentifier: String? = nil, localImageName: String? = nil, creationDate: Date? = nil, modificationDate: Date? = nil, score: Double? = nil, label: String? = nil) {
         self.assetIdentifier = assetIdentifier
         self.localImageName = localImageName
         self.creationDate = creationDate
         self.modificationDate = modificationDate
         self.score = score
+        self.label = label
     }
     
     func loadImage(targetSize: CGSize = CGSize(width: 512, height: 512), completion: @escaping (UIImage?) -> Void) {
@@ -63,6 +68,18 @@ struct SelectedPhoto {
                 return
             }
             
+            // Scale up the target size for better quality on retina displays
+            let scale = UIScreen.main.scale
+            var scaledSize = CGSize(
+                width: targetSize.width * scale,
+                height: targetSize.height * scale
+            )
+            
+            // Use maximum size if target size is zero
+            if CGSizeEqualToSize(targetSize, .zero) {
+                scaledSize = PHImageManagerMaximumSize
+            }
+            
             let options = PHImageRequestOptions()
             options.deliveryMode = .highQualityFormat
             options.isNetworkAccessAllowed = true
@@ -70,7 +87,7 @@ struct SelectedPhoto {
             
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: targetSize,
+                targetSize: scaledSize,
                 contentMode: .aspectFit,
                 options: options
             ) { image, _ in
