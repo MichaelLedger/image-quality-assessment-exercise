@@ -22,7 +22,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     // Maximum number of recent photos to analyze (0 means all)
-    private var maxPhotoCount: Int {
+    internal var maxPhotoCount: Int {
         get {
             return UserDefaults.standard.integer(forKey: PreferenceKeys.maxPhotoCount)
         }
@@ -31,10 +31,10 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             UserDefaults.standard.synchronize()
         }
     }
-    private var selectedPhotos: [SelectedPhoto] = []
+    internal var selectedPhotos: [SelectedPhoto] = []
     private var bestPhoto: (image: UIImage?, imageName: String?, asset: PHAsset?, score: Double)?
     private var featurePrintCache: [String: VNFeaturePrintObservation] = [:]  // Cache for feature prints
-    private var scoredPhotos: [ScoredPhoto] = []
+    internal var scoredPhotos: [ScoredPhoto] = []
     private var labelCache: [String: String] = [:]  // Cache for photo labels
     private var excludedLabels: Set<String> {
         get {
@@ -68,13 +68,13 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     private var processingQueue = DispatchQueue(label: "com.app.imageScoring", qos: .userInitiated)
-    private var lastProcessingTime: TimeInterval = 0
+    internal var lastProcessingTime: TimeInterval = 0
     private let floatingButton = FloatingButton(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
     
-    @IBOutlet private var meanLabel: UILabel!
-    @IBOutlet private var aestheticLabel: UILabel!
-    @IBOutlet private var technicalLabel: UILabel!
-    @IBOutlet private var inputImageView: UIImageView!
+    @IBOutlet internal var meanLabel: UILabel!
+    @IBOutlet internal var aestheticLabel: UILabel!
+    @IBOutlet internal var technicalLabel: UILabel!
+    @IBOutlet internal var inputImageView: UIImageView!
     @IBOutlet private var picker: UIPickerView!
     //private var scoreRangeLabel: UILabel!
     
@@ -183,7 +183,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     
     let defaultExcludedLabels: Set<String> =  ["document"]
      
-    private func configureMaxPhotoCount() {
+    internal func configureMaxPhotoCount() {
         let alert = UIAlertController(
             title: "Configure Photo Limit",
             message: "Enter maximum number of photos to analyze (0 for no limit)",
@@ -303,7 +303,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         // Load and process first image
         if let firstPhoto = selectedPhotos.first {
-            firstPhoto.loadImage { [weak self] image in
+            firstPhoto.loadImage(targetSize: .zero) { [weak self] image in
                 guard let self = self,
                       let image = image,
                       let cgImage = image.cgImage else { return }
@@ -584,7 +584,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             // Load initial image if we have photos
             if let firstPhoto = self.selectedPhotos.first {
-                firstPhoto.loadImage { [weak self] image in
+                firstPhoto.loadImage(targetSize: .zero) { [weak self] image in
                     guard let self = self,
                           let image = image,
                           let cgImage = image.cgImage else { return }
@@ -612,14 +612,14 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             DispatchQueue.main.async {
                 switch status {
-                case .authorized, .restricted:
+                case .authorized:
                     self.showImagePicker()
                 case .denied:
                     self.showPhotoLibraryAccessAlert()
                 case .notDetermined:
                     // The user hasn't determined this yet, request authorization will be called again
                     break
-                case .limited:
+                case .limited, .restricted:
                     // Show picker with option to add more photos
                     self.showImagePickerWithLimitedAccess()
                 @unknown default:
@@ -719,7 +719,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
-    @objc private func syncScoredPhoto() {
+    @objc internal func syncScoredPhoto() {
         var newScoredPhotos: [ScoredPhoto] = []
         for photo in self.selectedPhotos {
             // check if photos scored in finding best photo
@@ -742,7 +742,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
     }
     
-    @objc private func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
+    @objc internal func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
         // Show loading indicator
         let loadingAlert = UIAlertController(
             title: "Processing Photos",
@@ -786,7 +786,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 //                continue
                 //            }
                 
-                photo.loadImage { imageResult in
+                photo.loadImage(targetSize: .zero) { imageResult in
                     // Prepare and score local image
                     guard let image = imageResult,
                           let cgImage = image.cgImage,
@@ -966,20 +966,20 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             if let score = currentPhoto.score, score > 0 {
                 // Update best photo if score is higher
-                if score > highestScore {
-                    highestScore = score
-                    currentPhoto.loadImage { image in
-                        DispatchQueue.main.async {
-                            self.bestPhoto = (image: image, imageName: currentPhoto.localImageName, asset: nil, score: score)
-                        }
-                    }
-                }
+//                if score > highestScore {
+//                    highestScore = score
+//                    currentPhoto.loadImage(targetSize: .zero) { image in
+//                        DispatchQueue.main.async {
+//                            self.bestPhoto = (image: image, imageName: currentPhoto.localImageName, asset: nil, score: score)
+//                        }
+//                    }
+//                }
                 group.leave()
                 continue
             }
             
             // Load and process photo
-            currentPhoto.loadImage { [weak self] image in
+            currentPhoto.loadImage(targetSize: .zero) { [weak self] image in
                 guard let self = self,
                       let image = image,
                       let cgImage = image.cgImage else {
@@ -1022,12 +1022,12 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                                 }
                                 
                                 // Update best photo if score is higher
-                                DispatchQueue.main.async {
-                                    if meanScore > highestScore {
-                                        highestScore = meanScore
-                                        self.bestPhoto = (image: image, imageName: self.selectedPhotos[photoIndex].localImageName, asset: nil, score: meanScore)
-                                    }
-                                }
+//                                DispatchQueue.main.async {
+//                                    if meanScore > highestScore {
+//                                        highestScore = meanScore
+//                                        self.bestPhoto = (image: image, imageName: self.selectedPhotos[photoIndex].localImageName, asset: nil, score: meanScore)
+//                                    }
+//                                }
                             }
                             group.leave()
                         }
@@ -1041,6 +1041,24 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         // When all photos are processed
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
+            var highestScorePhoto: SelectedPhoto?
+            // fetch highest scored photo from selectedPhotos once only
+            for photo in selectedPhotos {
+                if let score = photo.score, score > 0 {
+                    // Update best photo if score is higher
+                    if score > highestScore {
+                        highestScore = score
+                        highestScorePhoto = photo
+                    }
+                }
+            }
+            if let highestScorePhoto, let score = highestScorePhoto.score {
+                highestScorePhoto.loadImage(targetSize: .zero) { image in
+                    DispatchQueue.main.async {
+                        self.bestPhoto = (image: image, imageName: highestScorePhoto.localImageName, asset: nil, score: score)
+                    }
+                }
+            }
             
             // Calculate processing time
             self.lastProcessingTime = Date().timeIntervalSince(startTime)
@@ -1130,6 +1148,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
+    /*
     private func setupFloatingButton() {
         view.addSubview(floatingButton)
         
@@ -1144,6 +1163,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         floatingButton.addTarget(self, action: #selector(floatingButtonTapped), for: .touchUpInside)
     }
+     */
     
     private func resetToDefaultLabels() {
         // Reset to all labels selected
@@ -1153,7 +1173,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         fetchRecentPhotos()
     }
     
-    @objc private func configureLabelFiltering() {
+    @objc internal func configureLabelFiltering() {
         let alert = UIAlertController(
             title: "Configure Label Filtering",
             message: "Choose labels to include or exclude",
@@ -1284,6 +1304,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         present(alert, animated: true)
     }
     
+    /*
     @objc private func floatingButtonTapped() {
         let alert = UIAlertController(
             title: "Choose Scoring Algorithm",
@@ -1347,9 +1368,10 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         present(alert, animated: true)
     }
+     */
     
     @available(iOS 18.0, *)
-    private func calculateAestheticsScore(image: UIImage) async throws -> ImageAestheticsScoresObservation? {
+    internal func calculateAestheticsScore(image: UIImage) async throws -> ImageAestheticsScoresObservation? {
         // Convert UIImage to CIImage
         guard let ciImage = CIImage(image: image) else { return nil }
         
@@ -1361,7 +1383,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     @available(iOS 18.0, *)
-    private func scoreWithVision() {
+    internal func scoreWithVision() {
         let loadingAlert = UIAlertController(
             title: "Processing Photos",
             message: "Analyzing with Vision framework...",
@@ -1371,6 +1393,10 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         let startTime = Date()
         let group = DispatchGroup()
+        
+        // Track utility photos and scores
+        var utilityIndices = Set<Int>()
+        var photoScores = [(index: Int, score: Double)]()
         
         for photoIndex in selectedPhotos.indices {
             group.enter()
@@ -1384,13 +1410,13 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 Task {
                     do {
                         if let observation = try await self.calculateAestheticsScore(image: image) {
-                            // Convert score from -1...1 to 1...10 to match NIMA scale
-                            let normalizedScore = ((observation.overallScore + 1) / 2) * 9 + 1
-                            
-                            // Add utility info to picker display
-                            let isUtility = observation.isUtility
-                            DispatchQueue.main.async {
-                                self.selectedPhotos[photoIndex].updateScore(Double(normalizedScore), isUtility: isUtility)
+                            if observation.isUtility {
+                                // Mark as utility photo
+                                utilityIndices.insert(photoIndex)
+                            } else {
+                                // Convert score from -1...1 to 1...10 to match NIMA scale
+                                let normalizedScore = ((observation.overallScore + 1) / 2) * 9 + 1
+                                photoScores.append((index: photoIndex, score: Double(normalizedScore)))
                             }
                         }
                     } catch {
@@ -1405,11 +1431,38 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             guard let self = self else { return }
             self.lastProcessingTime = Date().timeIntervalSince(startTime)
             
+            // Get total count before removing utility photos
+            let totalCount = self.selectedPhotos.count
+            
+            // Create a map of which indices should be removed
+            let utilitySet = Set(utilityIndices)
+            
+            // Create new array without utility photos and with proper scores
+            self.selectedPhotos = self.selectedPhotos.enumerated().compactMap { (currentIndex, photo) in
+                if utilitySet.contains(currentIndex) {
+                    return nil // Filter out utility photos
+                }
+                
+                // Find and apply score if available
+                if let scoreInfo = photoScores.first(where: { $0.index == currentIndex }) {
+                    var updatedPhoto = photo
+                    updatedPhoto.updateScore(scoreInfo.score, isUtility: false)
+                    return updatedPhoto
+                }
+                
+                return photo
+            }
+            
             loadingAlert.dismiss(animated: true) {
                 // Show completion alert
                 let alert = UIAlertController(
                     title: "Analysis Complete",
-                    message: "Processed \(self.selectedPhotos.count) photos in \(String(format: "%.2f", self.lastProcessingTime)) seconds",
+                    message: """
+                        Processed \(totalCount) photos:
+                        • \(self.selectedPhotos.count) aesthetic photos scored
+                        • \(utilityIndices.count) utility images removed
+                        Time: \(String(format: "%.2f", self.lastProcessingTime)) seconds
+                        """,
                     preferredStyle: .alert
                 )
                 alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
@@ -1421,7 +1474,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 })
                 self.present(alert, animated: true)
                 
-                // Reload picker to show new scores
+                // Reload picker to show updated photos
                 self.picker.reloadAllComponents()
             }
         }
@@ -1589,7 +1642,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     // MARK: - UIImagePickerControllerDelegate
-    
+    /*
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         picker.dismiss(animated: true)
         
@@ -1606,6 +1659,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         // Run the models
         runModels(fromBestScore: false, aestheticInterpreter: aestheticInterpreter, technicalInterpreter: technicalInterpreter, inputs: preparedInputs, ioOptions: ioOptions)
     }
+     */
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
@@ -1700,6 +1754,7 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
     }
     
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+        guard selectedPhotos.count > row else { return }
         let photo = selectedPhotos[row]
         
         // Show loading indicator
@@ -1709,7 +1764,7 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
         activityIndicator.center = inputImageView.center
         
         // Load image
-        photo.loadImage { [weak self] image in
+        photo.loadImage(targetSize: .zero) { [weak self] image in
             guard let self = self,
                   let image = image,
                   let cgImage = image.cgImage else {

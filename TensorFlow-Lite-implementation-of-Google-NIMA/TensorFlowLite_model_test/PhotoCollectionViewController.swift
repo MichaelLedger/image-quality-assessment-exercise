@@ -31,7 +31,7 @@ class PhotoCollectionViewController: UIViewController {
         let width = (view.bounds.width - spacing * 2) / 3
         cellSize = CGSize(width: width, height: width)
         layout.itemSize = cellSize
-        print("cell size==\(cellSize)")
+        //print("cell size==\(cellSize)")
         
         // Create collection view
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
@@ -62,7 +62,7 @@ extension PhotoCollectionViewController: UICollectionViewDataSource {
         // Function to configure cell and cache image
         let configureCell = { [weak self] (image: UIImage) in
             guard let self = self else { return }
-            print("cell imgee loaded==\(image.cgImage?.width ?? 0)*\(image.cgImage?.height ?? 0)")
+            //print("cell imgee loaded==\(image.cgImage?.width ?? 0)*\(image.cgImage?.height ?? 0)")
             // Get label from photo
             let label = photo.label?.description
             cell.configure(with: image, score: photo.score, label: label)
