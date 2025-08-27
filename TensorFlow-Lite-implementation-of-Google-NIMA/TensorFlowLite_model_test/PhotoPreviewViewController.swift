@@ -8,8 +8,10 @@ class PhotoPreviewViewController: UIViewController {
     private let imageView = UIImageView()
     private let scoreLabel = UILabel()
     private let labelLabel = UILabel()
+    private let locationLabel = UILabel()
     private let scoreBackground = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
     private let labelBackground = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
+    private let locationBackground = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -68,10 +70,25 @@ class PhotoPreviewViewController: UIViewController {
         labelLabel.textColor = .white
         labelLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         labelLabel.textAlignment = .center
-        if let label = scoredPhoto?.label?.description {
+        if let label = scoredPhoto?.label {
             labelLabel.text = label
+            labelLabel.sizeToFit()
         }
         view.addSubview(labelLabel)
+        
+        // Setup location elements
+        locationBackground.layer.cornerRadius = 8
+        locationBackground.clipsToBounds = true
+        view.addSubview(locationBackground)
+        
+        locationLabel.textColor = .white
+        locationLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        locationLabel.textAlignment = .center
+        locationLabel.numberOfLines = 2
+        if let location = scoredPhoto?.locationName {
+            locationLabel.text = location
+        }
+        view.addSubview(locationLabel)
         
         // Calculate offsets and sizes
         let elementSize = CGSize(width: 120, height: 40)
@@ -95,13 +112,25 @@ class PhotoPreviewViewController: UIViewController {
             width: elementSize.width,
             height: elementSize.height
         )
-        labelLabel.frame = labelBackground.frame
+        labelBackground.frame.size.width = labelLabel.bounds.size.width + 16
+        labelLabel.center = labelBackground.center
+        
+        // Position location below label
+        locationBackground.frame = CGRect(
+            x: 0,
+            y: topPadding + navHeight + elementSize.height + 8,
+            width: elementSize.width * 2,
+            height: elementSize.height
+        )
+        locationLabel.frame = locationBackground.frame
         
         // Setup autoresizing masks
         scoreBackground.autoresizingMask = [.flexibleLeftMargin, .flexibleBottomMargin]
         scoreLabel.autoresizingMask = [.flexibleLeftMargin, .flexibleBottomMargin]
         labelBackground.autoresizingMask = [.flexibleRightMargin, .flexibleBottomMargin]
         labelLabel.autoresizingMask = [.flexibleRightMargin, .flexibleBottomMargin]
+        locationBackground.autoresizingMask = [.flexibleRightMargin, .flexibleBottomMargin, .flexibleWidth]
+        locationLabel.autoresizingMask = [.flexibleRightMargin, .flexibleBottomMargin, .flexibleWidth]
         
         loadImage()
     }
@@ -115,6 +144,8 @@ class PhotoPreviewViewController: UIViewController {
         scoreLabel.isHidden = true
         labelBackground.isHidden = true
         labelLabel.isHidden = true
+        locationBackground.isHidden = true
+        locationLabel.isHidden = true
         
         if let bundleImage = photo.image {
             // Load local image
@@ -124,6 +155,8 @@ class PhotoPreviewViewController: UIViewController {
             scoreLabel.isHidden = false
             labelBackground.isHidden = labelLabel.text == nil
             labelLabel.isHidden = labelLabel.text == nil
+            locationBackground.isHidden = locationLabel.text == nil
+            locationLabel.isHidden = locationLabel.text == nil
         } else {
             // Load asset image in high quality
             // Calculate target size based on screen bounds for high quality
@@ -141,6 +174,8 @@ class PhotoPreviewViewController: UIViewController {
                     self.scoreLabel.isHidden = false
                     self.labelBackground.isHidden = self.labelLabel.text == nil
                     self.labelLabel.isHidden = self.labelLabel.text == nil
+                    self.locationBackground.isHidden = self.locationLabel.text == nil
+                    self.locationLabel.isHidden = self.locationLabel.text == nil
                 }
             }
         }
@@ -159,6 +194,11 @@ class PhotoPreviewViewController: UIViewController {
         // Add label text if available
         if let label = scoredPhoto?.label?.description {
             activityItems.append("Photo Label: \(label)")
+        }
+        
+        // Add location text if available
+        if let location = scoredPhoto?.locationName {
+            activityItems.append("Location: \(location)")
         }
         
         let activityVC = UIActivityViewController(

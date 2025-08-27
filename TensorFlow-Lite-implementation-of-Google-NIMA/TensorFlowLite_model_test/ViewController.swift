@@ -14,59 +14,11 @@ import PhotosUI
 import Vision
 
 class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
-    // UserDefaults keys
-    private enum PreferenceKeys {
-        static let maxPhotoCount = "maxPhotoCount"
-        static let requiredLabels = "requiredLabels"
-        static let excludedLabels = "excludedLabels"
-    }
     
-    // Maximum number of recent photos to analyze (0 means all)
-    internal var maxPhotoCount: Int {
-        get {
-            return UserDefaults.standard.integer(forKey: PreferenceKeys.maxPhotoCount)
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: PreferenceKeys.maxPhotoCount)
-            UserDefaults.standard.synchronize()
-        }
-    }
     internal var selectedPhotos: [SelectedPhoto] = []
     private var bestPhoto: (image: UIImage?, imageName: String?, asset: PHAsset?, score: Double)?
-    private var featurePrintCache: [String: VNFeaturePrintObservation] = [:]  // Cache for feature prints
     internal var scoredPhotos: [ScoredPhoto] = []
-    private var labelCache: [String: String] = [:]  // Cache for photo labels
-    private var excludedLabels: Set<String> {
-        get {
-            if let data = UserDefaults.standard.data(forKey: PreferenceKeys.excludedLabels),
-               let labels = try? JSONDecoder().decode(Set<String>.self, from: data) {
-                return labels
-            }
-            return defaultExcludedLabels
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: PreferenceKeys.excludedLabels)
-                UserDefaults.standard.synchronize()
-            }
-        }
-    }
-    
-    private var requiredLabels: Set<String> {
-        get {
-            if let data = UserDefaults.standard.data(forKey: PreferenceKeys.requiredLabels),
-               let labels = try? JSONDecoder().decode(Set<String>.self, from: data) {
-                return labels
-            }
-            return defaultLabels
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: PreferenceKeys.requiredLabels)
-                UserDefaults.standard.synchronize()
-            }
-        }
-    }
+
     private var processingQueue = DispatchQueue(label: "com.app.imageScoring", qos: .userInitiated)
     internal var lastProcessingTime: TimeInterval = 0
     private let floatingButton = FloatingButton(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
@@ -159,29 +111,6 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                            "pedestrians-400811_640",
                            "people-3104635_640",
                            "person-1245959_640"]
-    
-    let defaultLabels: Set<String> = ["people", "team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
-        "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
-        "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
-        "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
-        "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
-        "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
-        "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
-        "canyon", "bride", "joker", "selfie", "storm", "skin"]
-    
-    //test
-    /*
-    let defaultLabels: Set<String> = ["team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
-        "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
-        "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
-        "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
-        "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
-        "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
-        "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
-        "canyon", "bride", "joker", "selfie", "storm", "skin", "outdoor", "document", "animal", "recreation"]
-    */
-    
-    let defaultExcludedLabels: Set<String> =  ["document"]
      
     internal func configureMaxPhotoCount() {
         let alert = UIAlertController(
@@ -192,7 +121,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         alert.addTextField { textField in
             textField.keyboardType = .numberPad
-            textField.text = String(self.maxPhotoCount)
+            textField.text = String(PhotoManager.shared.maxPhotoCount)
             textField.placeholder = "Enter number (0 for no limit)"
         }
         
@@ -201,8 +130,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                   let text = alert.textFields?.first?.text,
                   let count = Int(text) else { return }
             
-            self.maxPhotoCount = count
-            self.fetchRecentPhotos()
+            PhotoManager.shared.maxPhotoCount = count
+            self.checkPhotoLibraryAuthorizationAndFetchPhotos()
         })
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -214,7 +143,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         // Set default values if not already set
         if UserDefaults.standard.object(forKey: PreferenceKeys.maxPhotoCount) == nil {
-            maxPhotoCount = 500 // Default value
+            PhotoManager.shared.maxPhotoCount = 5 // Default value //test
         }
         
         // Setup score range label
@@ -445,160 +374,62 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     // MARK: - Photo Library Methods
     
     private func checkPhotoLibraryAuthorizationAndFetchPhotos() {
-        PHPhotoLibrary.requestAuthorization { [weak self] status in
-            guard let self = self else { return }
-            
-            DispatchQueue.main.async {
-                switch status {
-                case .authorized:
-                    self.fetchRecentPhotos()
-                case .limited:
-                    self.fetchRecentPhotos()
-                default:
-                    break
-                }
-            }
-        }
-    }
-    
-    private func fetchRecentPhotos() {
-        featurePrintCache.removeAll()
-        //labelCache.removeAll()
-        // Show loading alert
-        let loadingAlert = UIAlertController(
-            title: "Loading Photos",
-            message: "Fetching recent photos(filter duplicated/similar/labels)...",
-            preferredStyle: .alert
-        )
-        present(loadingAlert, animated: true)
-        
-        let startTime = Date()
-        
-        // Create fetch options
-        let fetchOptions = PHFetchOptions()
-//        // Sort by modification date to match Photos app recent order
-        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        // Set fetch limit (0 means no limit)
-        if maxPhotoCount > 0 {
-            fetchOptions.fetchLimit = maxPhotoCount
-        }
-        // Fetch only image asset
-        //fetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
-        // Get All Photos album collection
-        //let userLibrary = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumUserLibrary, options: nil).firstObject
-        //let assets = PHAsset.fetchAssets(in: userLibrary!, options: fetchOptions)
-        
-        // Fetch the most recent photos
-        let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-        
-        // Clear existing photos
-        selectedPhotos.removeAll()
-        
-        // Create dispatch group to wait for all photos to be processed
-        let group = DispatchGroup()
-        
-        // Process assets in parallel using async/await
-//        for asset in assets.objects(at: IndexSet(integersIn: 0..<assets.count)) {
-        assets.enumerateObjects(options: .concurrent) { asset, _, _ in
-            group.enter()
-            
-            // Start an async task for each asset
-            Task {
-                let options = PHImageRequestOptions()
-                options.isSynchronous = false
-                options.isNetworkAccessAllowed = true
-                options.deliveryMode = .highQualityFormat
-                options.resizeMode = .exact
-                
-                // Check for duplicates using asset metadata
-                let isDuplicate = await MainActor.run {
-                    self.selectedPhotos.contains { photo in
-                        // Check if we already have this exact asset
-                        if photo.assetIdentifier == asset.localIdentifier {
-                            return true
-                        }
-                        
-                        // Check creation dates if available
-//                        if let existingDate = photo.creationDate,
-//                           let newDate = asset.creationDate,
-//                           abs(existingDate.timeIntervalSince(newDate)) < 1.0 { // Within 1 second
-//                            return true
-//                        }
-                        
-                        return false
-                    }
-                }
-                
-                if !isDuplicate {
-                    // Check for similar photos using Vision
-                    let isSimilar = await self.isSimilarToExistingPhotos(asset)
-                    if !isSimilar {
-                        // Check if photo meets label criteria
-                        let meetsLabelCriteria = await self.photoMeetsLabelCriteria(asset)
-                        if meetsLabelCriteria.0 {
-                            let label = meetsLabelCriteria.1
-                            // Update UI on main thread
-                            await MainActor.run {
-                                var filtered = SelectedPhoto.fromAsset(asset)
-                                filtered.updateLabel(label)
-                                self.selectedPhotos.append(filtered)
-                            }
-                        } else {
-                            print("Photo excluded by label criteria: \(asset.localIdentifier) with label \(meetsLabelCriteria.1?.description ?? "nil")")
-                        }
-                    } else {
-                        print("Similar photo skipped: \(asset.localIdentifier)")
-                    }
-                } else {
-                    print("Duplicate photo skipped: \(asset.localIdentifier)")
-                }
-                
-                group.leave()
-            }
-        }
-        
-        // Update UI when all photos are processed
-        group.notify(queue: .main) { [weak self] in
-            guard let self = self else { return }
-            
-            // Sort photos by creation date (most recent first)
-            //self.selectedPhotos.sort { $0.creationDate ?? Date() > $1.creationDate ?? Date() }
-            
-            // Dismiss loading alert
-            loadingAlert.dismiss(animated: true) {
-                // Calculate processing time
-                let processingTime = Date().timeIntervalSince(startTime)
-                
-                // Show completion alert with processing time
-                let completionAlert = UIAlertController(
-                    title: "Photos Filtered and Loaded",
-                    message: "Fetched \(self.selectedPhotos.count) photos from \(self.maxPhotoCount) in \(String(format: "%.2f", processingTime)) seconds",
-                    preferredStyle: .alert
-                )
-                completionAlert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(completionAlert, animated: true)
+        Task {
+            // Show loading alert
+            let loadingAlert = UIAlertController(
+                title: "Loading Photos",
+                message: "Fetching recent photos(filter duplicated/similar/labels)...",
+                preferredStyle: .alert
+            )
+            await MainActor.run {
+                present(loadingAlert, animated: true)
             }
             
-            // Update picker
-            self.picker.reloadAllComponents()
+            let startTime = Date()
             
-            // Load initial image if we have photos
-            if let firstPhoto = self.selectedPhotos.first {
-                firstPhoto.loadImage(targetSize: .zero) { [weak self] image in
-                    guard let self = self,
-                          let image = image,
-                          let cgImage = image.cgImage else { return }
+            // Fetch photos using shared manager
+            let photos = await PhotoManager.shared.fetchRecentPhotos(maxPhotoCount: PhotoManager.shared.maxPhotoCount)
+            
+            // Update UI on main thread
+            await MainActor.run {
+                self.selectedPhotos = photos
+                
+                // Dismiss loading alert
+                loadingAlert.dismiss(animated: true) {
+                    // Calculate processing time
+                    let processingTime = Date().timeIntervalSince(startTime)
                     
-                    DispatchQueue.main.async {
-                        self.inputImageView.image = image
-                        if let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
-                            self.runModels(
-                                fromBestScore: false,
-                                aestheticInterpreter: self.aestheticInterpreter,
-                                technicalInterpreter: self.technicalInterpreter,
-                                inputs: preparedInputs,
-                                ioOptions: self.ioOptions
-                            )
+                    // Show completion alert with processing time
+                    let completionAlert = UIAlertController(
+                        title: "Photos Filtered and Loaded",
+                        message: "Fetched \(self.selectedPhotos.count) photos from \(PhotoManager.shared.maxPhotoCount) in \(String(format: "%.2f", processingTime)) seconds",
+                        preferredStyle: .alert
+                    )
+                    completionAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(completionAlert, animated: true)
+                }
+                
+                // Update picker
+                self.picker.reloadAllComponents()
+                
+                // Load initial image if we have photos
+                if let firstPhoto = self.selectedPhotos.first {
+                    firstPhoto.loadImage(targetSize: .zero) { [weak self] image in
+                        guard let self = self,
+                              let image = image,
+                              let cgImage = image.cgImage else { return }
+                        
+                        DispatchQueue.main.async {
+                            self.inputImageView.image = image
+                            if let preparedInputs = self.prepareImage(fromBestScore: false, withCGImage: cgImage) {
+                                self.runModels(
+                                    fromBestScore: false,
+                                    aestheticInterpreter: self.aestheticInterpreter,
+                                    technicalInterpreter: self.technicalInterpreter,
+                                    inputs: preparedInputs,
+                                    ioOptions: self.ioOptions
+                                )
+                            }
                         }
                     }
                 }
@@ -733,7 +564,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                     localImageName: photo.localImageName,
                     modificationDate: photo.modificationDate,
                     score: score,
-                    label: photo.label
+                    label: photo.label,
+                    location: photo.location,
+                    locationName: photo.locationName
                 )
                 newScoredPhotos.append(scoredPhoto)
                 continue
@@ -769,7 +602,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                         localImageName: photo.localImageName,
                         modificationDate: photo.modificationDate,
                         score: score,
-                        label: photo.label
+                        label: photo.label,
+                        location: photo.location,
+                        locationName: photo.locationName
                     )
                     newScoredPhotos.append(scoredPhoto)
                     group.leave()
@@ -843,7 +678,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                                         localImageName: photo.localImageName,
                                         modificationDate: photo.modificationDate,
                                         score: meanScore,
-                                        label: photo.label
+                                        label: photo.label,
+                                        location: photo.location,
+                                        locationName: photo.locationName
                                     )
                                     newScoredPhotos.append(scoredPhoto)
                                 } else {
@@ -1165,14 +1002,6 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
      */
     
-    private func resetToDefaultLabels() {
-        // Reset to all labels selected
-        requiredLabels = defaultLabels
-        excludedLabels = defaultExcludedLabels
-        // Refresh photos with new filter settings
-        fetchRecentPhotos()
-    }
-    
     @objc internal func configureLabelFiltering() {
         let alert = UIAlertController(
             title: "Configure Label Filtering",
@@ -1192,7 +1021,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         // Add option to clear all filters
         alert.addAction(UIAlertAction(title: "Reset to Default (All Labels)", style: .destructive) { [weak self] _ in
-            self?.resetToDefaultLabels()
+            PhotoManager.shared.resetToDefaultLabels()
+            // Refresh photos with new filter settings
+            self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
         })
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -1228,41 +1059,39 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         stackView.translatesAutoresizingMaskIntoConstraints = false
         
         // Get labels based on filter type
-        let labelsSet = filterType == .required ? defaultLabels : defaultExcludedLabels
+        let labelsSet = filterType == .required ? PhotoManager.shared.defaultLabels : PhotoManager.shared.defaultExcludedLabels
         // Convert to array and sort alphabetically (A to Z)
         let commonLabels = Array(labelsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         
         // Create checkboxes for each label
         for (index, label) in commonLabels.enumerated() {
             let isSelected = filterType == .required ?
-                requiredLabels.contains(label) : 
-                excludedLabels.contains(label)
+            PhotoManager.shared.requiredLabels.contains(label) :
+            PhotoManager.shared.excludedLabels.contains(label)
             
             let button = UIButton(type: .system)
             button.setTitle("\(isSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
             button.contentHorizontalAlignment = .left
             button.tag = index
             
-            button.addAction(UIAction { [weak self, weak button] _ in
-                guard let self = self, let button = button else { return }
-                
+            button.addAction(UIAction { _ in
                 var isNowSelected = false
                 
                 switch filterType {
                 case .required:
-                    if self.requiredLabels.contains(label) {
+                    if PhotoManager.shared.requiredLabels.contains(label) {
                         //self.requiredLabels.remove(label)
-                        self.requiredLabels = self.requiredLabels.filter { $0 != label }
+                        PhotoManager.shared.requiredLabels = PhotoManager.shared.requiredLabels.filter { $0 != label }
                     } else {
-                        self.requiredLabels.insert(label)
+                        PhotoManager.shared.requiredLabels.insert(label)
                         isNowSelected = true
                     }
                 case .excluded:
-                    if self.excludedLabels.contains(label) {
+                    if PhotoManager.shared.excludedLabels.contains(label) {
                         //self.excludedLabels.remove(label)
-                        self.excludedLabels = self.excludedLabels.filter { $0 != label }
+                        PhotoManager.shared.excludedLabels = PhotoManager.shared.excludedLabels.filter { $0 != label }
                     } else {
-                        self.excludedLabels.insert(label)
+                        PhotoManager.shared.excludedLabels.insert(label)
                         isNowSelected = true
                     }
                 }
@@ -1296,7 +1125,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         // Add Done button that refreshes the photos
         alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
-            self?.fetchRecentPhotos()
+            self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
         })
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -1477,149 +1306,6 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 // Reload picker to show updated photos
                 self.picker.reloadAllComponents()
             }
-        }
-    }
-    
-    private func detectImageLabel(for asset: PHAsset) async -> String? {
-        // Check cache first
-        if let cachedLabel = labelCache[asset.localIdentifier] {
-            return cachedLabel
-        }
-        
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.resizeMode = .exact
-        
-        // Convert PHImageManager callback to async
-        let image = await withCheckedContinuation { continuation in
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: CGSize(width: 512, height: 512),
-                contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: image)
-            }
-        }
-        
-        guard let image = image,
-              let cgImage = image.cgImage else {
-            return nil
-        }
-        
-        // Create Vision request
-        let request = VNClassifyImageRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        
-        do {
-            try handler.perform([request])
-            
-            // Get results sorted by confidence
-            if let observations = request.results?.filter({ $0.confidence > 0.75 }), // Using same threshold as before
-               let topObservation = observations.first {
-                let label = topObservation.identifier.lowercased()
-                print("VNClassifyImage==\(label)")
-                labelCache[asset.localIdentifier] = label
-                return label
-            }
-        } catch {
-            print("Vision request failed: \(error)")
-        }
-        
-        return nil
-    }
-    
-    private func photoMeetsLabelCriteria(_ asset: PHAsset) async -> (Bool, String?) {
-        let label = await detectImageLabel(for: asset)// always detect label
-        guard let label else {
-            return (false, nil) // No label detected, exclude photo
-            //return (true, nil) // No label detected, include photo //test
-        }
-        // Check if the label is excluded
-        if !excludedLabels.isEmpty, excludedLabels.contains(label) {
-            return (false, label)
-        }
-        // Check if the photo has at least one required label (if any are specified)
-        if !requiredLabels.isEmpty && !requiredLabels.contains(label) {
-            return (false, label)
-        }
-        return (true, label)
-    }
-    
-    private func generateFeaturePrint(for image: UIImage) async throws -> VNFeaturePrintObservation? {
-        guard let cgImage = image.cgImage else { return nil }
-        
-        let request = VNGenerateImageFeaturePrintRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        try handler.perform([request])
-        return request.results?.first as? VNFeaturePrintObservation
-    }
-    
-    private func isSimilarToExistingPhotos(_ asset: PHAsset) async -> Bool {
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.resizeMode = .exact
-        
-        // Convert PHImageManager callback to async
-        let image = await withCheckedContinuation { continuation in
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: CGSize(width: 512, height: 512),
-                contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: image)
-            }
-        }
-        
-        guard let image = image else { return false }
-        
-        do {
-            var isSimilar = false
-            let distanceTolerance = self.distanceTolerance()
-            let distanceConfidenceThreshold = self.distanceConfidenceThreshold()
-            if let newFeaturePrint = try await generateFeaturePrint(for: image) {
-                print("featurePrintCache.count:\(featurePrintCache.count)")
-                // Check against cached feature prints
-                for (_, existingFeaturePrint) in featurePrintCache {
-                    var distance: Float = 0
-                    try newFeaturePrint.computeDistance(&distance, to: existingFeaturePrint)
-                    // If distance is less than threshold, consider it similar
-                    // Cache the new feature print if not similar
-                    print("Cached feature print for asset: \(asset.localIdentifier)")
-                    if newFeaturePrint.confidence >= distanceConfidenceThreshold, distance < distanceTolerance {
-                        print("Found similar photo with distance: \(distance), tolerance:\(distanceTolerance), confidence: \(newFeaturePrint.confidence), skipping asset: \(asset.localIdentifier)")
-                        isSimilar = true
-                        break
-                    }
-                }
-                featurePrintCache[asset.localIdentifier] = newFeaturePrint
-            }
-            return isSimilar
-        } catch {
-            print("Error generating feature print: \(error)")
-        }
-        
-        return false
-    }
-    
-    private func distanceConfidenceThreshold() -> Float {
-        return 0.75
-    }
-    
-    /*
-     Found similar photo with distance: 0.65984994, tolerance:0.8, confidence: 1.0, skipping asset: 4A217696-61DB-4FDA-8876-75C26FBCAEFA/L0/001
-     Found similar photo with distance: 0.05960039, tolerance:0.8, confidence: 1.0, skipping asset: 963A91DF-07B1-46C6-A9D3-DD5544AD2803/L0/001
-     Found similar photo with distance: 0.04105223, tolerance:0.8, confidence: 1.0, skipping asset: 4BBFB846-36A3-45B6-8BF1-1F2197E4A85B/L0/001
-     */
-    private func distanceTolerance() -> Float {
-        // On iOS 17, the distance between two observations is always less than 2.0.
-        // On iOS 16, the distance can vary a lot; typical values range between 0.0 and 40.0.
-        let tolerance = 0.1 //0.4
-        if #available(iOS 17.0, *) {
-            return Float(2.0 * tolerance)
-        } else {
-            return Float(40.0 * tolerance)
         }
     }
     

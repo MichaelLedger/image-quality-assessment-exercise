@@ -37,14 +37,31 @@ extension PhotoManager {
                 // Process each location group
                 for (_, locationPhotos) in groupedPhotos {
                     // Filter similar photos within the location group
-                    var featurePrintCache: [String : VNFeaturePrintObservation] = [:]
-                    let filteredPhotos = await self.filterPhotos(locationPhotos, featurePrintCache: &featurePrintCache, labelCache: &self.labelCache)
+                    //var featurePrintCache: [String : VNFeaturePrintObservation] = [:]
+                    var labelCache: [String : String] = [:]
+                    let filteredPhotos = await self.filterPhotos(locationPhotos, labelCache: &labelCache)
+                    //self.featurePrintCache.addEntries(from: featurePrintCache)
+                    self.labelCache += labelCache
+                    
+                    
                     
                     // Process each filtered photo
                     for photo in filteredPhotos {
                         // Get label
-                        let label = await self.detectImageLabel(for: photo, labelCache: &self.labelCache)
+                        let label = await self.detectImageLabel(for: photo)
                         
+                        let photoMeetsLabelCriteria = await PhotoManager.shared.photoMeetsLabelCriteria(label)
+                        
+                        // filter by label criteria
+                        if !photoMeetsLabelCriteria.0 {
+                            continue
+                        }
+                        
+                        // Get Location Name
+                        var locationName: String? = nil
+                        if let photoLocation = photo.location {
+                            locationName = await LocationManager.shared.getLocationName(for: photoLocation)
+                        }
                         // Score the photo using Vision
                         if #available(iOS 18.0, *),
                            let score = await self.scoreByVision(photo) {
@@ -53,7 +70,9 @@ extension PhotoManager {
                                 localImageName: nil,
                                 modificationDate: photo.modificationDate,
                                 score: score,
-                                label: label
+                                label: label,
+                                location: photo.location,
+                                locationName: locationName
                             )
                             scoredPhotos.append(scoredPhoto)
                         }

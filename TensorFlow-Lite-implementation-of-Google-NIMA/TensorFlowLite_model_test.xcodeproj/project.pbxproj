@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		670907752E5849C400B7BDD9 /* PhotoCollectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907732E5849C400B7BDD9 /* PhotoCollectionViewController.swift */; };
 		670907762E5849C400B7BDD9 /* PhotoPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */; };
-		670907782E584CD500B7BDD9 /* ScoredPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670907772E584CD500B7BDD9 /* ScoredPhoto.swift */; };
-		674A09FE2E58508F000BA288 /* SelectedPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A09FD2E58508F000BA288 /* SelectedPhoto.swift */; };
 		674A0A572E5C4DD8000BA288 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674A0A562E5C4DD8000BA288 /* Assets.xcassets */; };
 		674A0A592E5D853F000BA288 /* ViewController+FloatingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A582E5D853F000BA288 /* ViewController+FloatingButton.swift */; };
 		674A0A612E5D855F000BA288 /* PhotoManager+Labels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A5C2E5D855F000BA288 /* PhotoManager+Labels.swift */; };
@@ -20,7 +18,10 @@
 		674A0A652E5D855F000BA288 /* PhotoFiltering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A5A2E5D855F000BA288 /* PhotoFiltering.swift */; };
 		674A0A672E5D9059000BA288 /* CustomImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A662E5D9059000BA288 /* CustomImagePicker.swift */; };
 		674A0A692E5D99C7000BA288 /* PhotoManager+Vision.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A682E5D99C7000BA288 /* PhotoManager+Vision.swift */; };
-		674A0A6C2E5DA4C6000BA288 /* String+Height.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A6A2E5DA4C6000BA288 /* String+Height.swift */; };
+		674A0A6C2E5DA4C6000BA288 /* String+Ex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A6A2E5DA4C6000BA288 /* String+Ex.swift */; };
+		674A0A702E5EA1F7000BA288 /* SelectedPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A6E2E5EA1F7000BA288 /* SelectedPhoto.swift */; };
+		674A0A712E5EA1F7000BA288 /* ScoredPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A6D2E5EA1F7000BA288 /* ScoredPhoto.swift */; };
+		674A0A732E5EA253000BA288 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A0A722E5EA253000BA288 /* LocationManager.swift */; };
 		C22D6C5422DDF7DC00DD5625 /* BestViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */; };
 		C243011E22DDBB1800BD3807 /* aesthetic_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */; };
 		C243011F22DDBB1800BD3807 /* technical_model.tflite in Resources */ = {isa = PBXBuildFile; fileRef = C243011D22DDBB1800BD3807 /* technical_model.tflite */; };
@@ -38,8 +39,6 @@
 		4BB83B44F323B764A52055D2 /* Pods-TensorFlowLite_model_test.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TensorFlowLite_model_test.release.xcconfig"; path = "Target Support Files/Pods-TensorFlowLite_model_test/Pods-TensorFlowLite_model_test.release.xcconfig"; sourceTree = "<group>"; };
 		670907732E5849C400B7BDD9 /* PhotoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCollectionViewController.swift; sourceTree = "<group>"; };
 		670907742E5849C400B7BDD9 /* PhotoPreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoPreviewViewController.swift; sourceTree = "<group>"; };
-		670907772E584CD500B7BDD9 /* ScoredPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoredPhoto.swift; sourceTree = "<group>"; };
-		674A09FD2E58508F000BA288 /* SelectedPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectedPhoto.swift; sourceTree = "<group>"; };
 		674A0A292E586716000BA288 /* FloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButton.swift; sourceTree = "<group>"; };
 		674A0A562E5C4DD8000BA288 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		674A0A582E5D853F000BA288 /* ViewController+FloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ViewController+FloatingButton.swift"; sourceTree = "<group>"; };
@@ -50,7 +49,10 @@
 		674A0A5F2E5D855F000BA288 /* FloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButton.swift; sourceTree = "<group>"; };
 		674A0A662E5D9059000BA288 /* CustomImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomImagePicker.swift; sourceTree = "<group>"; };
 		674A0A682E5D99C7000BA288 /* PhotoManager+Vision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhotoManager+Vision.swift"; sourceTree = "<group>"; };
-		674A0A6A2E5DA4C6000BA288 /* String+Height.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Height.swift"; sourceTree = "<group>"; };
+		674A0A6A2E5DA4C6000BA288 /* String+Ex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Ex.swift"; sourceTree = "<group>"; };
+		674A0A6D2E5EA1F7000BA288 /* ScoredPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoredPhoto.swift; sourceTree = "<group>"; };
+		674A0A6E2E5EA1F7000BA288 /* SelectedPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectedPhoto.swift; sourceTree = "<group>"; };
+		674A0A722E5EA253000BA288 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		8510B6DCCC236CD8DAFA48A5 /* Pods_TensorFlowLite_model_test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TensorFlowLite_model_test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C22D6C5322DDF7DC00DD5625 /* BestViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BestViewController.swift; sourceTree = "<group>"; };
 		C243011C22DDBB1800BD3807 /* aesthetic_model.tflite */ = {isa = PBXFileReference; lastKnownFileType = file; path = aesthetic_model.tflite; sourceTree = "<group>"; };
@@ -91,6 +93,7 @@
 		674A0A5E2E5D855F000BA288 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				674A0A722E5EA253000BA288 /* LocationManager.swift */,
 				674A0A5A2E5D855F000BA288 /* PhotoFiltering.swift */,
 				674A0A5B2E5D855F000BA288 /* PhotoManager.swift */,
 				674A0A5C2E5D855F000BA288 /* PhotoManager+Labels.swift */,
@@ -112,9 +115,18 @@
 		674A0A6B2E5DA4C6000BA288 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
-				674A0A6A2E5DA4C6000BA288 /* String+Height.swift */,
+				674A0A6A2E5DA4C6000BA288 /* String+Ex.swift */,
 			);
 			path = Extensions;
+			sourceTree = "<group>";
+		};
+		674A0A6F2E5EA1F7000BA288 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				674A0A6D2E5EA1F7000BA288 /* ScoredPhoto.swift */,
+				674A0A6E2E5EA1F7000BA288 /* SelectedPhoto.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		C2EF380722D8C85100C332BF = {
@@ -138,11 +150,10 @@
 		C2EF381222D8C85100C332BF /* TensorFlowLite_model_test */ = {
 			isa = PBXGroup;
 			children = (
+				674A0A6F2E5EA1F7000BA288 /* Models */,
 				674A0A6B2E5DA4C6000BA288 /* Extensions */,
 				674A0A5E2E5D855F000BA288 /* Managers */,
 				674A0A602E5D855F000BA288 /* Views */,
-				674A09FD2E58508F000BA288 /* SelectedPhoto.swift */,
-				670907772E584CD500B7BDD9 /* ScoredPhoto.swift */,
 				C2EF381322D8C85100C332BF /* AppDelegate.swift */,
 				C2EF381522D8C85100C332BF /* ViewController.swift */,
 				674A0A582E5D853F000BA288 /* ViewController+FloatingButton.swift */,
@@ -294,17 +305,18 @@
 			buildActionMask = 2147483647;
 			files = (
 				674A0A672E5D9059000BA288 /* CustomImagePicker.swift in Sources */,
+				674A0A732E5EA253000BA288 /* LocationManager.swift in Sources */,
 				674A0A592E5D853F000BA288 /* ViewController+FloatingButton.swift in Sources */,
-				674A09FE2E58508F000BA288 /* SelectedPhoto.swift in Sources */,
-				670907782E584CD500B7BDD9 /* ScoredPhoto.swift in Sources */,
 				C2EF381622D8C85100C332BF /* ViewController.swift in Sources */,
 				674A0A692E5D99C7000BA288 /* PhotoManager+Vision.swift in Sources */,
 				C22D6C5422DDF7DC00DD5625 /* BestViewController.swift in Sources */,
 				C2EF381422D8C85100C332BF /* AppDelegate.swift in Sources */,
 				670907752E5849C400B7BDD9 /* PhotoCollectionViewController.swift in Sources */,
-				674A0A6C2E5DA4C6000BA288 /* String+Height.swift in Sources */,
+				674A0A6C2E5DA4C6000BA288 /* String+Ex.swift in Sources */,
 				670907762E5849C400B7BDD9 /* PhotoPreviewViewController.swift in Sources */,
 				674A0A612E5D855F000BA288 /* PhotoManager+Labels.swift in Sources */,
+				674A0A702E5EA1F7000BA288 /* SelectedPhoto.swift in Sources */,
+				674A0A712E5EA1F7000BA288 /* ScoredPhoto.swift in Sources */,
 				674A0A622E5D855F000BA288 /* FloatingButton.swift in Sources */,
 				674A0A632E5D855F000BA288 /* PhotoManager.swift in Sources */,
 				674A0A642E5D855F000BA288 /* PhotoManager+Location.swift in Sources */,

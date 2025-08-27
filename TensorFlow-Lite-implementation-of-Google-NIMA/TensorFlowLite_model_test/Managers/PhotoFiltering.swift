@@ -16,7 +16,7 @@ extension PhotoManager {
     
     // MARK: - Similarity Check
     
-    func isSimilarToExistingPhotos(_ asset: PHAsset, featurePrintCache: inout [String: VNFeaturePrintObservation]) async -> Bool {
+    func isSimilarToExistingPhotos(_ asset: PHAsset) async -> Bool {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .exact
@@ -42,21 +42,20 @@ extension PhotoManager {
             
             if let newFeaturePrint = try await generateFeaturePrint(for: image) {
                 // Check against cached feature prints
-                for (_, existingFeaturePrint) in featurePrintCache {
+                try featurePrintCache.forEach { (key, feature) in
                     var distance: Float = 0
-                    try newFeaturePrint.computeDistance(&distance, to: existingFeaturePrint)
+                    try newFeaturePrint.computeDistance(&distance, to: feature)
                     
                     // If distance is less than threshold and confidence is high enough, consider it similar
                     if newFeaturePrint.confidence >= distanceConfidenceThreshold, distance < distanceTolerance {
                         print("Found similar photo with distance: \(distance), tolerance: \(distanceTolerance), confidence: \(newFeaturePrint.confidence)")
                         isSimilar = true
-                        break
                     }
                 }
                 
-                // Cache the new feature print
+                // Cache the new feature print if not similar
                 if !isSimilar {
-                    featurePrintCache[asset.localIdentifier] = newFeaturePrint
+                    setCachedFeaturePrint(newFeaturePrint, for: asset.localIdentifier)
                 }
             }
             return isSimilar
@@ -75,7 +74,7 @@ extension PhotoManager {
     private func distanceTolerance() -> Float {
         // On iOS 17, the distance between two observations is always less than 2.0
         // On iOS 16, the distance can vary a lot; typical values range between 0.0 and 40.0
-        let tolerance = 0.1 // Adjust this value to control similarity sensitivity
+        let tolerance = 0.2 // Adjust this value to control similarity sensitivity
         if #available(iOS 17.0, *) {
             return Float(2.0 * tolerance)
         } else {
@@ -85,9 +84,9 @@ extension PhotoManager {
     
     // MARK: - Label Detection
     
-    func detectImageLabel(for asset: PHAsset, labelCache: inout [String: String]) async -> String? {
+    func detectImageLabel(for asset: PHAsset) async -> String? {
         // Check cache first
-        if let cachedLabel = labelCache[asset.localIdentifier] {
+        if let cachedLabel = getCachedLabel(for: asset.localIdentifier) {
             return cachedLabel
         }
         
@@ -123,7 +122,7 @@ extension PhotoManager {
             if let observations = request.results?.filter({ $0.confidence > 0.75 }),
                let topObservation = observations.first {
                 let label = topObservation.identifier.lowercased()
-                labelCache[asset.localIdentifier] = label
+                setCachedLabel(label, for: asset.localIdentifier)
                 return label
             }
         } catch {
@@ -135,8 +134,10 @@ extension PhotoManager {
     
     // MARK: - Photo Filtering
     
-    func filterPhotos(_ photos: [PHAsset], featurePrintCache: inout [String: VNFeaturePrintObservation], labelCache: inout [String: String]) async -> [PHAsset] {
+    func filterPhotos(_ photos: [PHAsset], labelCache: inout [String: String]) async -> [PHAsset] {
         var filteredPhotos: [PHAsset] = []
+        
+        featurePrintCache.removeAll()
         
         for photo in photos {
             // Check for duplicates by asset identifier
@@ -145,7 +146,7 @@ extension PhotoManager {
             }
             
             // Check for similar photos
-            if await isSimilarToExistingPhotos(photo, featurePrintCache: &featurePrintCache) {
+            if await isSimilarToExistingPhotos(photo) {
                 continue
             }
             

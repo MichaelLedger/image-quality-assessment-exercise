@@ -66,6 +66,21 @@ extension PhotoManager {
         return (true, topLabel)
     }
     
+    func photoMeetsLabelCriteria(_ label: String?, requiredLabels: Set<String>? = nil, excludedLabels: Set<String>? = nil) -> (Bool, String?) {
+        guard let label = label?.lowercased() else {
+            return (false, nil)
+        }
+        // Check if the label is excluded
+        if let excludedLabels, !excludedLabels.isEmpty, excludedLabels.contains(label) {
+            return (false, label)
+        }
+        // Check if the photo has at least one required label
+        if let requiredLabels, !requiredLabels.isEmpty, requiredLabels.contains(label) {
+            return (true, label)
+        }
+        return (true, label)
+    }
+    
     // MARK: - Label Cache Management
     
     func updateLabelCache(for asset: PHAsset, with label: String) {

@@ -4,12 +4,279 @@ import Vision
 import Firebase
 import FirebaseMLCommon
 
-class PhotoManager {
+// UserDefaults keys
+public enum PreferenceKeys {
+    static let maxPhotoCount = "maxPhotoCount"
+    static let requiredLabels = "requiredLabels"
+    static let excludedLabels = "excludedLabels"
+}
+
+actor PhotoManager {
+    
     static let shared = PhotoManager()
+    
+    // Maximum number of recent photos to analyze (0 means all)
+    public var maxPhotoCount: Int {
+        get {
+            return UserDefaults.standard.integer(forKey: PreferenceKeys.maxPhotoCount)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: PreferenceKeys.maxPhotoCount)
+            UserDefaults.standard.synchronize()
+        }
+    }
+    
+    public let defaultLabels: Set<String> = ["people", "team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
+                                             "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
+                                             "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
+                                             "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
+                                             "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
+                                             "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
+                                             "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
+                                             "canyon", "bride", "joker", "selfie", "storm", "skin"]
+    
+    //test
+    /*
+     let defaultLabels: Set<String> = ["team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
+     "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
+     "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
+     "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
+     "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
+     "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
+     "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
+     "canyon", "bride", "joker", "selfie", "storm", "skin", "outdoor", "document", "animal", "recreation"]
+     */
+    
+    public let defaultExcludedLabels: Set<String> =  ["document"]
+    
+    public var excludedLabels: Set<String> {
+        get {
+            if let data = UserDefaults.standard.data(forKey: PreferenceKeys.excludedLabels),
+               let labels = try? JSONDecoder().decode(Set<String>.self, from: data) {
+                return labels
+            }
+            return defaultExcludedLabels
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: PreferenceKeys.excludedLabels)
+                UserDefaults.standard.synchronize()
+            }
+        }
+    }
+    
+    public var requiredLabels: Set<String> {
+        get {
+            if let data = UserDefaults.standard.data(forKey: PreferenceKeys.requiredLabels),
+               let labels = try? JSONDecoder().decode(Set<String>.self, from: data) {
+                return labels
+            }
+            return defaultLabels
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: PreferenceKeys.requiredLabels)
+                UserDefaults.standard.synchronize()
+            }
+        }
+    }
+    
     private init() {}
     
-    internal var featurePrintCache: [String: VNFeaturePrintObservation] = [:]
-    var labelCache: [String: String] = [:]
+    // MARK: - Reset to default labels
+    
+    public func resetToDefaultLabels() {
+        requiredLabels = defaultLabels
+        excludedLabels = defaultExcludedLabels
+    }
+    
+    // MARK: - Authorization
+    
+    func checkPhotoLibraryAuthorization() async -> Bool {
+        let status = await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+        
+        switch status {
+        case .authorized, .limited:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    // MARK: - Photo Fetching
+    
+    private func fetchUserLibraryAlbum() -> PHAssetCollection? {
+        let smartAlbumCollections = PHAssetCollection.fetchAssetCollections(
+            with: .smartAlbum,
+            subtype: .any,
+            options: nil
+        )
+        var smartAlbumRecentlyAdded: PHAssetCollection?
+        smartAlbumCollections.enumerateObjects { collection, start, stop in
+            if collection.assetCollectionSubtype == .smartAlbumUserLibrary {
+                smartAlbumRecentlyAdded = collection
+                stop.pointee = true
+            }
+        }
+        return smartAlbumRecentlyAdded
+    }
+    
+    private func createFetchOptions(maxPhotoCount: Int) -> PHFetchOptions {
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        if maxPhotoCount > 0 {
+            fetchOptions.fetchLimit = maxPhotoCount
+        }
+        return fetchOptions
+    }
+    
+    func fetchRecentPhotos(maxPhotoCount: Int = 500) async -> [SelectedPhoto] {
+        // Clear caches
+        clearCaches()
+        
+        let auth = await checkPhotoLibraryAuthorization()
+        guard auth else {
+            return []
+        }
+        
+        // Get the album and fetch options
+        guard let smartAlbumRecentlyAdded = fetchUserLibraryAlbum() else {
+            return []
+        }
+        let fetchOptions = createFetchOptions(maxPhotoCount: maxPhotoCount)
+        
+        // Fetch the most recent photos
+        let assets = PHAsset.fetchAssets(in: smartAlbumRecentlyAdded, options: fetchOptions)
+            
+        return await processPhotosInParallel(assets: assets)
+    }
+    
+    private func processPhotosInParallel(assets: PHFetchResult<PHAsset>) async -> [SelectedPhoto] {
+        var processedIdentifiers = Set<String>()
+        let identifiersLock = NSLock()
+        var counter = 0
+        
+        // Convert PHFetchResult to Array to avoid closure capture issues
+        var assetsArray: [PHAsset] = []
+        assets.enumerateObjects(options: .reverse) { asset, _, _ in
+            assetsArray.append(asset)
+        }
+        
+        // Process in smaller batches with timeout
+        let batchSize = 20 // Reduced batch size
+        var allPhotos: [SelectedPhoto] = []
+        
+        // Process each batch sequentially
+        for batch in stride(from: 0, to: assetsArray.count, by: batchSize) {
+            let end = min(batch + batchSize, assetsArray.count)
+            let batchAssets = Array(assetsArray[batch..<end])
+            let batchNumber = batch/batchSize + 1
+            
+            print("Starting batch \(batchNumber)...")
+            
+            // Process photos in this batch sequentially
+            for (index, asset) in batchAssets.enumerated() {
+                print("Batch \(batchNumber): Processing photo \(index + 1)/\(batchAssets.count)")
+                
+                if let photo = await processPhoto(
+                    asset: asset,
+                    counter: &counter,
+                    totalCount: assets.count,
+                    processedIdentifiers: &processedIdentifiers,
+                    identifiersLock: identifiersLock
+                ) {
+                    allPhotos.append(photo)
+                    print("Batch \(batchNumber): Successfully processed photo \(index + 1)/\(batchAssets.count)")
+                }
+            }
+            
+            print("Batch \(batchNumber) completed. Processed \(end) of \(assetsArray.count) photos. Successfully processed: \(allPhotos.count)")
+        }
+        
+        print("All photos processed. Total selected: \(allPhotos.count)")
+        return allPhotos
+    }
+    
+    private func processPhoto(
+        asset: PHAsset,
+        counter: inout Int,
+        totalCount: Int,
+        processedIdentifiers: inout Set<String>,
+        identifiersLock: NSLock
+    ) async -> SelectedPhoto? {
+        counter += 1
+        print("Processing photo \(counter)/\(totalCount): \(asset.localIdentifier)")
+        
+        // Check for duplicates
+        identifiersLock.lock()
+        let isDuplicate = processedIdentifiers.contains(asset.localIdentifier)
+        processedIdentifiers.insert(asset.localIdentifier)
+        identifiersLock.unlock()
+        
+        if isDuplicate {
+            print("Duplicate photo skipped: \(asset.localIdentifier)")
+            return nil
+        }
+        
+        // Check for similar photos
+        let isSimilar = await isSimilarToExistingPhotos(asset)
+        if isSimilar {
+            print("Similar photo skipped: \(asset.localIdentifier)")
+            return nil
+        }
+        
+        // Check label criteria
+        let label = await detectImageLabel(for: asset)
+        let meetsLabelCriteria = await photoMeetsLabelCriteria(label).0
+        if !meetsLabelCriteria {
+            print("Photo excluded by label criteria: \(asset.localIdentifier) with label \(label ?? "nil")")
+            return nil
+        }
+        
+        // Create photo with location
+        var selectedPhoto = SelectedPhoto.fromAsset(asset)
+        selectedPhoto.updateLabel(label)
+        
+        if let location = asset.location {
+            let locationName = await LocationManager.shared.getLocationName(for: location)
+            selectedPhoto.updateLocation(location)
+            selectedPhoto.updateLocationName(locationName)
+        }
+        
+        print("Photo selected: \(asset.localIdentifier) with label \(label ?? "nil")")
+        return selectedPhoto
+    }
+    
+    public var featurePrintCache: [String: VNFeaturePrintObservation] = [:]
+    public var labelCache: [String: String] = [:]
+    
+    // MARK: - Cache Management
+    
+    func getCachedLabel(for identifier: String) -> String? {
+        return labelCache[identifier]
+    }
+    
+    func setCachedLabel(_ label: String, for identifier: String) {
+        labelCache[identifier] = label
+    }
+    
+    func getCachedFeaturePrint(for identifier: String) -> VNFeaturePrintObservation? {
+        return featurePrintCache[identifier]
+    }
+    
+    func setCachedFeaturePrint(_ featurePrint: VNFeaturePrintObservation, for identifier: String) {
+        featurePrintCache[identifier] = featurePrint
+    }
+    
+    func clearCaches() {
+        featurePrintCache.removeAll()
+        labelCache.removeAll()
+    }
     
     // MARK: - Photo Fetching
     
@@ -25,7 +292,7 @@ class PhotoManager {
                 // Fetch moments collections
                 let result = PHAssetCollection.fetchMoments(with: nil)
                 var locationGroups: [[PHAsset]] = []
-                let groupLock = NSLock()
+                //let groupLock = NSLock()
                 let fetchOptions = PHFetchOptions()
                 fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
                 fetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
@@ -57,9 +324,9 @@ class PhotoManager {
                     // Collect results
                     for await momentAssets in group {
                         if !momentAssets.isEmpty {
-                            groupLock.lock()
+                            //groupLock.lock()
                             locationGroups.append(momentAssets)
-                            groupLock.unlock()
+                            //groupLock.unlock()
                         }
                     }
                 }
@@ -92,23 +359,32 @@ class PhotoManager {
                 // Process each date group
                 for (_, datePhotos) in groupedPhotos {
                     // Filter similar photos within the group
-                    var featurePrintCache: [String: VNFeaturePrintObservation] = [:]
-                    let filteredPhotos = await self.filterPhotos(datePhotos, featurePrintCache: &featurePrintCache, labelCache: &self.labelCache)
+                    var labelCache: [String: String] = [:]
+                    let filteredPhotos = await self.filterPhotos(datePhotos, labelCache: &labelCache)
+                    self.labelCache = labelCache
                     
                     // Process each filtered photo
                     for photo in filteredPhotos {
                         // Get label
-                        let label = await self.detectImageLabel(for: photo, labelCache: &self.labelCache)
+                        let label = await self.detectImageLabel(for: photo)
                         
                         // Score the photo using Vision
                         if #available(iOS 18.0, *),
                            let score = await self.scoreByVision(photo) {
+                            // Get location name if available
+                            var locationName: String? = nil
+                            if let location = photo.location {
+                                locationName = await LocationManager.shared.getLocationName(for: location)
+                            }
+                            
                             let scoredPhoto = ScoredPhoto(
                                 assetIdentifier: photo.localIdentifier,
                                 localImageName: nil,
                                 modificationDate: photo.modificationDate,
                                 score: score,
-                                label: label
+                                label: label,
+                                location: photo.location,
+                                locationName: locationName
                             )
                             scoredPhotos.append(scoredPhoto)
                         }

@@ -169,11 +169,12 @@ extension ViewController {
         
         // Get asset identifier if available
         let assetIdentifier = (info[.phAsset] as? PHAsset)?.localIdentifier
+        let location = (info[.phAsset] as? PHAsset)?.location
         
         if #available(iOS 18.0, *), let customPicker = picker as? CustomImagePicker, customPicker.scoringType == .vision {
             // Score with Vision
             Task {
-                await handleVisionScoring(image: image, assetIdentifier: assetIdentifier)
+                await handleVisionScoring(image: image, assetIdentifier: assetIdentifier, location: location)
             }
         } else {
             // Score with NIMA
@@ -184,19 +185,26 @@ extension ViewController {
             Task {
                 let detectedLabel = await detectLabel(for: image)
                 
+                // Get Location Name
+                var locationName: String? = nil
+                if let photoLocation = location {
+                    locationName = await LocationManager.shared.getLocationName(for: photoLocation)
+                }
+                
                 // Create completion handler for technical model
                 let handleTechnicalScore: (Double, Double) -> Void = { [weak self, assetIdentifier] aestheticScore, technicalScore in
                     let meanScore = (aestheticScore + technicalScore) / 2
                     DispatchQueue.main.async {
                         guard let self = self else { return }
-                        
                         let previewVC = PhotoPreviewViewController()
                         let scoredPhoto = ScoredPhoto(
                             assetIdentifier: assetIdentifier,
                             localImageName: nil,
                             modificationDate: Date(),
                             score: meanScore,
-                            label: detectedLabel ?? "Unknown"
+                            label: detectedLabel ?? "Unknown",
+                            location: location,
+                            locationName: locationName
                         )
                         previewVC.scoredPhoto = scoredPhoto
                         self.navigationController?.pushViewController(previewVC, animated: true)
@@ -263,13 +271,19 @@ extension ViewController {
     }
     
     @available(iOS 18.0, *)
-    private func handleVisionScoring(image: UIImage, assetIdentifier: String?) async {
+    private func handleVisionScoring(image: UIImage, assetIdentifier: String?, location: CLLocation?) async {
         do {
             // Get Vision score and label in parallel
             async let aestheticsTask = calculateAestheticsScore(image: image)
             async let labelTask = detectLabel(for: image)
             
             let (observation, detectedLabel) = await (try aestheticsTask, labelTask)
+            
+            // Get Location Name
+            var locationName: String? = nil
+            if let photoLocation = location {
+                locationName = await LocationManager.shared.getLocationName(for: photoLocation)
+            }
             
             // Calculate score and label
             var score: Float = 0
@@ -288,7 +302,9 @@ extension ViewController {
                 localImageName: nil,
                 modificationDate: Date(),
                 score: Double(score),
-                label: label
+                label: label,
+                location: location,
+                locationName: locationName
             )
             
             // Show preview on main thread

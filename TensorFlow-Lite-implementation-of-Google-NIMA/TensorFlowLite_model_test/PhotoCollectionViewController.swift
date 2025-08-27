@@ -63,9 +63,10 @@ extension PhotoCollectionViewController: UICollectionViewDataSource {
         let configureCell = { [weak self] (image: UIImage) in
             guard let self = self else { return }
             //print("cell imgee loaded==\(image.cgImage?.width ?? 0)*\(image.cgImage?.height ?? 0)")
-            // Get label from photo
+            // Get label and location from photo
             let label = photo.label?.description
-            cell.configure(with: image, score: photo.score, label: label)
+            let location = photo.locationName
+            cell.configure(with: image, score: photo.score, label: label, location: location)
             self.imageCache.setObject(image, forKey: cacheKey, cost: Int(image.size.width * image.size.height * 4))
         }
         
@@ -161,13 +162,13 @@ class PhotoCell: UICollectionViewCell {
         labelLabel.textColor = .white
         labelLabel.font = .systemFont(ofSize: 12, weight: .medium)
         labelLabel.textAlignment = .center
+        labelLabel.numberOfLines = 1
         contentView.addSubview(labelLabel)
         
         // Position elements
         let padding: CGFloat = 4
         let elementHeight: CGFloat = 20
         let scoreWidth: CGFloat = 50
-        let labelWidth: CGFloat = 80
         
         // Position score at top right
         scoreBackground.frame = CGRect(
@@ -178,14 +179,14 @@ class PhotoCell: UICollectionViewCell {
         )
         scoreLabel.frame = scoreBackground.frame
         
-        // Position label at bottom
-        labelBackground.frame = CGRect(
-            x: (contentView.bounds.width - labelWidth) / 2,
+        // Position label at bottom - will be adjusted in configure
+        labelLabel.frame = CGRect(
+            x: padding,
             y: contentView.bounds.height - elementHeight - padding,
-            width: labelWidth,
+            width: contentView.bounds.width - (2 * padding),
             height: elementHeight
         )
-        labelLabel.frame = labelBackground.frame
+        labelBackground.frame = labelLabel.frame
         
         // Setup autoresizing masks
         scoreBackground.autoresizingMask = [.flexibleLeftMargin, .flexibleBottomMargin]
@@ -194,12 +195,27 @@ class PhotoCell: UICollectionViewCell {
         labelLabel.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin, .flexibleRightMargin]
     }
     
-    func configure(with image: UIImage, score: Double, label: String? = nil) {
+    func configure(with image: UIImage, score: Double, label: String? = nil, location: String? = nil) {
         imageView.image = image
         scoreLabel.text = String(format: "%.2f", score)
         
         if let label = label {
             labelLabel.text = label
+            
+            // Calculate the size needed for the text
+            let padding: CGFloat = 8 // Extra padding for text
+            let maxWidth = UIScreen.main.bounds.width - padding * 2
+            let labelSize = (label as NSString).size(withAttributes: [.font: labelLabel.font!])
+            let labelWidth = min(max(labelSize.width + padding * 2, 60), maxWidth) // Min width 60, max width full screen
+            
+            // Center the label horizontally
+            let x = (contentView.bounds.width - labelWidth) / 2
+            let y = contentView.bounds.height - labelLabel.frame.height - 4
+            
+            // Update frames
+            labelLabel.frame = CGRect(x: x, y: y, width: labelWidth, height: labelLabel.frame.height)
+            labelBackground.frame = labelLabel.frame
+            
             labelBackground.isHidden = false
             labelLabel.isHidden = false
         } else {
