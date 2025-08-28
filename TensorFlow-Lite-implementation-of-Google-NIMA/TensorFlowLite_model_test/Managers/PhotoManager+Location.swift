@@ -53,7 +53,7 @@ extension PhotoManager {
                         let photoMeetsLabelCriteria = await PhotoManager.shared.photoMeetsLabelCriteria(label)
                         
                         // filter by label criteria
-                        if !photoMeetsLabelCriteria.0 {
+                        if !photoMeetsLabelCriteria {
                             continue
                         }
                         

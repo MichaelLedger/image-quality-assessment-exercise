@@ -26,14 +26,15 @@ actor PhotoManager {
         }
     }
     
-    public let defaultLabels: Set<String> = ["people", "team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
-                                             "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
-                                             "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
-                                             "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
-                                             "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
-                                             "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
-                                             "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
-                                             "canyon", "bride", "joker", "selfie", "storm", "skin"]
+    public let defaultLabels: Set<String> =
+    ["people", "team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
+     "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
+     "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
+     "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
+     "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
+     "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
+     "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
+     "canyon", "bride", "joker", "selfie", "storm", "skin"]
     
     //test
     /*
@@ -152,7 +153,7 @@ actor PhotoManager {
         
         // Fetch the most recent photos
         let assets = PHAsset.fetchAssets(in: smartAlbumRecentlyAdded, options: fetchOptions)
-            
+        
         return await processPhotosInParallel(assets: assets)
     }
     
@@ -232,7 +233,7 @@ actor PhotoManager {
         
         // Check label criteria
         let label = await detectImageLabel(for: asset)
-        let meetsLabelCriteria = await photoMeetsLabelCriteria(label).0
+        let meetsLabelCriteria = await photoMeetsLabelCriteria(label)
         if !meetsLabelCriteria {
             print("Photo excluded by label criteria: \(asset.localIdentifier) with label \(label ?? "nil")")
             return nil

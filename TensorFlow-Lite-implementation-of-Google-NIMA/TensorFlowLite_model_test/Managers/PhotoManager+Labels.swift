@@ -66,19 +66,35 @@ extension PhotoManager {
         return (true, topLabel)
     }
     
-    func photoMeetsLabelCriteria(_ label: String?, requiredLabels: Set<String>? = nil, excludedLabels: Set<String>? = nil) -> (Bool, String?) {
-        guard let label = label?.lowercased() else {
-            return (false, nil)
+    func photoMeetsLabelCriteria(_ label: String?, requiredLabels: Set<String>? = nil, excludedLabels: Set<String>? = nil) async -> Bool {
+        guard let label = label?.lowercased(), !label.isEmpty else {
+            return false
         }
-        // Check if the label is excluded
-        if let excludedLabels, !excludedLabels.isEmpty, excludedLabels.contains(label) {
-            return (false, label)
+        if requiredLabels == nil {
+            // Check if the photo has at least one required label
+            let actorRequiredLabels = await PhotoManager.shared.requiredLabels
+            if !actorRequiredLabels.isEmpty, actorRequiredLabels.contains(label) {
+                return true
+            }
+        } else {
+            // Check if the photo has at least one required label
+            if let requiredLabels, !requiredLabels.isEmpty, requiredLabels.contains(label) {
+                return true
+            }
         }
-        // Check if the photo has at least one required label
-        if let requiredLabels, !requiredLabels.isEmpty, requiredLabels.contains(label) {
-            return (true, label)
+        if excludedLabels == nil {
+            // Check if the label is excluded
+            let actorExcludedLabels = await PhotoManager.shared.excludedLabels
+            if !actorExcludedLabels.isEmpty, actorExcludedLabels.contains(label) {
+                return false
+            }
+        } else {
+            // Check if the label is excluded
+            if let excludedLabels, !excludedLabels.isEmpty, excludedLabels.contains(label) {
+                return false
+            }
         }
-        return (true, label)
+        return true
     }
     
     // MARK: - Label Cache Management
