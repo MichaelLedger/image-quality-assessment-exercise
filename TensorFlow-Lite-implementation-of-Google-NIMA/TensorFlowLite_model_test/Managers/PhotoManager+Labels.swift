@@ -5,7 +5,7 @@ import Photos
 extension PhotoManager {
     // MARK: - Label Detection
     
-    func detectLabels(for asset: PHAsset) async -> [VNClassificationObservation] {
+    func detectLabels(for asset: PHAsset) async -> String {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .exact
@@ -24,7 +24,7 @@ extension PhotoManager {
         
         guard let image = image,
               let cgImage = image.cgImage else {
-            return []
+            return ""
         }
         
         // Create Vision request
@@ -33,68 +33,83 @@ extension PhotoManager {
         
         do {
             try handler.perform([request])
-            return request.results?.filter { $0.confidence > 0.75 } ?? []
+            if let observations = request.results?.filter({ $0.confidence > 0.75 }).sorted(by: { $0.confidence > $1.confidence }) {
+                let labels = observations.map { $0.identifier.lowercased() }
+                return labels.joined(separator: "/")
+            }
+            return ""
         } catch {
             print("Vision request failed: \(error)")
-            return []
+            return ""
         }
     }
     
     // MARK: - Label Filtering
     
     func photoMeetsLabelCriteria(_ asset: PHAsset, requiredLabels: Set<String>, excludedLabels: Set<String>) async -> (Bool, String?) {
-        let observations = await detectLabels(for: asset)
-        
-        // Get the top label
-        guard let topLabel = observations.first?.identifier.lowercased() else {
+        let labels = await detectLabels(for: asset)
+        if labels.isEmpty {
             return (false, nil)
         }
         
-        // Check if the label is excluded
-        if !excludedLabels.isEmpty, excludedLabels.contains(topLabel) {
-            return (false, topLabel)
+        let labelSet = Set(labels.split(separator: "/").map(String.init))
+        
+        // Check if any label is excluded
+        if !excludedLabels.isEmpty {
+            let hasExcludedLabel = !labelSet.isDisjoint(with: excludedLabels)
+            if hasExcludedLabel {
+                return (false, labels)
+            }
         }
         
         // Check if the photo has at least one required label
         if !requiredLabels.isEmpty {
-            let hasRequiredLabel = observations.contains { observation in
-                requiredLabels.contains(observation.identifier.lowercased())
-            }
-            return (hasRequiredLabel, topLabel)
+            let hasRequiredLabel = !labelSet.isDisjoint(with: requiredLabels)
+            return (hasRequiredLabel, labels)
         }
         
-        return (true, topLabel)
+        return (true, labels)
     }
     
     func photoMeetsLabelCriteria(_ label: String?, requiredLabels: Set<String>? = nil, excludedLabels: Set<String>? = nil) async -> Bool {
         guard let label = label?.lowercased(), !label.isEmpty else {
             return false
         }
+        
+        let labelSet = Set(label.split(separator: "/").map(String.init))
+        
+        // NOTE: exclude first!!! (e.g. document/screenshot/people)
+        if excludedLabels == nil {
+            // Check if any label is excluded
+            let actorExcludedLabels = await PhotoManager.shared.excludedLabels
+            if !actorExcludedLabels.isEmpty {
+                return labelSet.isDisjoint(with: actorExcludedLabels)
+            }
+        } else {
+            // Check if any label is excluded
+            if let excludedLabels, !excludedLabels.isEmpty {
+                return labelSet.isDisjoint(with: excludedLabels)
+            }
+        }
+        
         if requiredLabels == nil {
             // Check if the photo has at least one required label
             let actorRequiredLabels = await PhotoManager.shared.requiredLabels
-            if !actorRequiredLabels.isEmpty, actorRequiredLabels.contains(label) {
-                return true
+            if !actorRequiredLabels.isEmpty {
+                return !labelSet.isDisjoint(with: actorRequiredLabels)
             }
         } else {
             // Check if the photo has at least one required label
-            if let requiredLabels, !requiredLabels.isEmpty, requiredLabels.contains(label) {
-                return true
+            if let requiredLabels, !requiredLabels.isEmpty {
+                return !labelSet.isDisjoint(with: requiredLabels)
             }
         }
-        if excludedLabels == nil {
-            // Check if the label is excluded
-            let actorExcludedLabels = await PhotoManager.shared.excludedLabels
-            if !actorExcludedLabels.isEmpty, actorExcludedLabels.contains(label) {
-                return false
-            }
+        
+        if let requiredLabels, requiredLabels.isEmpty {
+            return true
         } else {
-            // Check if the label is excluded
-            if let excludedLabels, !excludedLabels.isEmpty, excludedLabels.contains(label) {
-                return false
-            }
+            return false
         }
-        return true
     }
     
     // MARK: - Label Cache Management
@@ -113,9 +128,9 @@ extension PhotoManager {
         var labelCounts: [String: Int] = [:]
         
         for asset in photos {
-            let observations = await detectLabels(for: asset)
-            for observation in observations {
-                let label = observation.identifier.lowercased()
+            let labels = await detectLabels(for: asset)
+            let labelSet = Set(labels.split(separator: "/").map(String.init))
+            for label in labelSet {
                 labelCounts[label, default: 0] += 1
             }
         }

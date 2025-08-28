@@ -6,93 +6,82 @@ import Vision
 extension PhotoManager {
     // MARK: - Location Album Fetching
     
-    func fetchLocationAlbums(fetchLimit: Int = 1000, completion: @escaping ([ScoredPhoto]) -> Void) {
-        PHPhotoLibrary.requestAuthorization { [weak self] status in
-            guard let self = self, status == .authorized else {
-                DispatchQueue.main.async { completion([]) }
-                return
+    func fetchLocationAlbums(fetchLimit: Int = 1000) async throws -> [ScoredPhoto] {
+        // Request photo library authorization
+        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        guard status == .authorized else {
+            return []
+        }
+        
+        // Fetch photos with location data
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.fetchLimit = fetchLimit
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+        
+        var photos: [PHAsset] = []
+        assets.enumerateObjects { asset, _, _ in
+            if asset.location != nil {
+                photos.append(asset)
             }
+        }
+        
+        // Group photos by location
+        let groupedPhotos = Dictionary(grouping: photos) { photo in
+            self.locationKey(for: photo.location)
+        }
+        
+        var scoredPhotos: [ScoredPhoto] = []
+        
+        // Process each location group
+        for (_, locationPhotos) in groupedPhotos {
+            // Filter similar photos within the location group
+            var labelCache: [String : String] = [:]
+            let filteredPhotos = await self.filterPhotos(locationPhotos, labelCache: &labelCache)
+            self.updateLabelCacheWithDictionary(labelCache)
             
-            Task {
-                // Fetch photos with location data
-                let fetchOptions = PHFetchOptions()
-                fetchOptions.fetchLimit = fetchLimit
-                fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-                let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            // Process each filtered photo
+            for photo in filteredPhotos {
+                // Get label
+                let label = await self.detectImageLabel(for: photo)
                 
-                var photos: [PHAsset] = []
-                assets.enumerateObjects { asset, _, _ in
-                    if asset.location != nil {
-                        photos.append(asset)
-                    }
+                let photoMeetsLabelCriteria = await PhotoManager.shared.photoMeetsLabelCriteria(label)
+                
+                // filter by label criteria
+                if !photoMeetsLabelCriteria {
+                    continue
                 }
                 
-                // Group photos by location
-                let groupedPhotos = Dictionary(grouping: photos) { photo in
-                    self.locationKey(for: photo.location)
+                // Get Location Name
+                var locationName: String? = nil
+                if let photoLocation = photo.location {
+                    locationName = await LocationManager.shared.getLocationName(for: photoLocation)
                 }
                 
-                var scoredPhotos: [ScoredPhoto] = []
-                
-                // Process each location group
-                for (_, locationPhotos) in groupedPhotos {
-                    // Filter similar photos within the location group
-                    //var featurePrintCache: [String : VNFeaturePrintObservation] = [:]
-                    var labelCache: [String : String] = [:]
-                    let filteredPhotos = await self.filterPhotos(locationPhotos, labelCache: &labelCache)
-                    //self.featurePrintCache.addEntries(from: featurePrintCache)
-                    self.labelCache += labelCache
-                    
-                    
-                    
-                    // Process each filtered photo
-                    for photo in filteredPhotos {
-                        // Get label
-                        let label = await self.detectImageLabel(for: photo)
-                        
-                        let photoMeetsLabelCriteria = await PhotoManager.shared.photoMeetsLabelCriteria(label)
-                        
-                        // filter by label criteria
-                        if !photoMeetsLabelCriteria {
-                            continue
-                        }
-                        
-                        // Get Location Name
-                        var locationName: String? = nil
-                        if let photoLocation = photo.location {
-                            locationName = await LocationManager.shared.getLocationName(for: photoLocation)
-                        }
-                        // Score the photo using Vision
-                        if #available(iOS 18.0, *),
-                           let score = await self.scoreByVision(photo) {
-                            let scoredPhoto = ScoredPhoto(
-                                assetIdentifier: photo.localIdentifier,
-                                localImageName: nil,
-                                modificationDate: photo.modificationDate,
-                                score: score,
-                                label: label,
-                                location: photo.location,
-                                locationName: locationName
-                            )
-                            scoredPhotos.append(scoredPhoto)
-                        }
-                    }
-                }
-                
-                // Sort by score (highest first)
-                let sortedPhotos = scoredPhotos.sorted { $0.score > $1.score }
-                
-                // Return on main thread
-                DispatchQueue.main.async {
-                    completion(sortedPhotos)
+                // Score the photo using Vision
+                if #available(iOS 18.0, *),
+                   let score = await self.scoreByVision(photo) {
+                    let scoredPhoto = ScoredPhoto(
+                        assetIdentifier: photo.localIdentifier,
+                        localImageName: nil,
+                        modificationDate: photo.modificationDate,
+                        score: score,
+                        label: label,
+                        location: photo.location,
+                        locationName: locationName
+                    )
+                    scoredPhotos.append(scoredPhoto)
                 }
             }
         }
+        
+        // Sort by score (highest first)
+        return scoredPhotos.sorted { $0.score > $1.score }
     }
     
     // MARK: - Location Helpers
     
-    private func locationKey(for location: CLLocation?) -> String {
+    private nonisolated func locationKey(for location: CLLocation?) -> String {
         guard let location = location else { return "Unknown Location" }
         
         // Round coordinates to group nearby locations (approximately 1km accuracy)

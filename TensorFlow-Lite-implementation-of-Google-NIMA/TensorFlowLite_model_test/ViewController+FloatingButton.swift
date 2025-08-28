@@ -124,38 +124,64 @@ extension ViewController {
         present(alert, animated: true)
     }
     
+    @MainActor
     func showMomentsAlbum() {
-        let loadingAlert = UIAlertController(title: nil, message: "Processing photos...", preferredStyle: .alert)
-        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
-        loadingIndicator.hidesWhenStopped = true
-        loadingIndicator.style = .medium
-        loadingIndicator.startAnimating()
-        loadingAlert.view.addSubview(loadingIndicator)
-        present(loadingAlert, animated: true)
-        //test
-        PhotoManager.shared.fetchMomentsAlbums(fetchLimit: 500) { [weak self] photos in
-            self?.dismiss(animated: true) {
+        Task {
+            let loadingAlert = UIAlertController(title: nil, message: "Processing photos...", preferredStyle: .alert)
+            let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+            loadingIndicator.hidesWhenStopped = true
+            loadingIndicator.style = .medium
+            loadingIndicator.startAnimating()
+            loadingAlert.view.addSubview(loadingIndicator)
+            present(loadingAlert, animated: true)
+            
+            do {
+                let photos = try await PhotoManager.shared.fetchMomentsAlbums(fetchLimit: 500)
+                dismiss(animated: true)
                 let collectionVC = PhotoCollectionViewController()
                 collectionVC.photos = photos
-                self?.navigationController?.pushViewController(collectionVC, animated: true)
+                navigationController?.pushViewController(collectionVC, animated: true)
+            } catch {
+                dismiss(animated: true)
+                // Handle error appropriately
+                let errorAlert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to fetch photos: \(error.localizedDescription)",
+                    preferredStyle: .alert
+                )
+                errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                present(errorAlert, animated: true)
             }
         }
     }
     
+    @MainActor
     func showLocationAlbum() {
-        let loadingAlert = UIAlertController(title: nil, message: "Processing photos...", preferredStyle: .alert)
-        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
-        loadingIndicator.hidesWhenStopped = true
-        loadingIndicator.style = .medium
-        loadingIndicator.startAnimating()
-        loadingAlert.view.addSubview(loadingIndicator)
-        present(loadingAlert, animated: true)
-        //test
-        PhotoManager.shared.fetchLocationAlbums(fetchLimit: 500) { [weak self] photos in
-            self?.dismiss(animated: true) {
+        Task {
+            let loadingAlert = UIAlertController(title: nil, message: "Processing photos...", preferredStyle: .alert)
+            let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+            loadingIndicator.hidesWhenStopped = true
+            loadingIndicator.style = .medium
+            loadingIndicator.startAnimating()
+            loadingAlert.view.addSubview(loadingIndicator)
+            present(loadingAlert, animated: true)
+            
+            do {
+                let photos = try await PhotoManager.shared.fetchLocationAlbums(fetchLimit: 500)
+                dismiss(animated: true)
                 let collectionVC = PhotoCollectionViewController()
                 collectionVC.photos = photos
-                self?.navigationController?.pushViewController(collectionVC, animated: true)
+                navigationController?.pushViewController(collectionVC, animated: true)
+            } catch {
+                dismiss(animated: true)
+                // Handle error appropriately
+                let errorAlert = UIAlertController(
+                    title: "Error",
+                    message: "Failed to fetch photos: \(error.localizedDescription)",
+                    preferredStyle: .alert
+                )
+                errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                present(errorAlert, animated: true)
             }
         }
     }
@@ -258,10 +284,10 @@ extension ViewController {
         do {
             try handler.perform([request])
             
-            // Get results sorted by confidence
-            if let observations = request.results?.filter({ $0.confidence > 0.75 }),
-               let topObservation = observations.first {
-                return topObservation.identifier.lowercased()
+            // Get all observations with confidence > 0.75 and join their identifiers
+            if let observations = request.results?.filter({ $0.confidence > 0.75 }).sorted(by: { $0.confidence > $1.confidence }), !observations.isEmpty {
+                let labels = observations.map { $0.identifier.lowercased() }
+                return labels.joined(separator: "/")
             }
         } catch {
             print("Vision label detection failed: \(error)")

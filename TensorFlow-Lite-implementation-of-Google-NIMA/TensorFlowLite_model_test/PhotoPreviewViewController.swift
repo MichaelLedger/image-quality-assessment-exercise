@@ -63,22 +63,46 @@ class PhotoPreviewViewController: UIViewController {
         view.addSubview(scoreLabel)
         
         // Setup label elements
+        
+        // Calculate offsets and sizes
+        let elementSize = CGSize(width: 120, height: 40)
+        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        let window = windowScene?.windows.first(where: { $0.isKeyWindow })
+        let topPadding = window?.safeAreaInsets.top ?? 0
+        let navHeight = navigationController?.navigationBar.frame.height ?? 0
+        
+        // Position label at top left
+        labelBackground.frame = CGRect(
+            x: 0,
+            y: topPadding + navHeight,
+            width: elementSize.width,
+            height: elementSize.height
+        )
         labelBackground.layer.cornerRadius = 8
         labelBackground.clipsToBounds = true
         view.addSubview(labelBackground)
         
         labelLabel.textColor = .white
-        labelLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        labelLabel.font = .systemFont(ofSize: 16, weight: .medium)
         labelLabel.textAlignment = .center
+        labelLabel.numberOfLines = 0
+        view.addSubview(labelLabel)
+        var labelSize = CGSize.zero
         if let label = scoredPhoto?.label {
             labelLabel.text = label
-            labelLabel.sizeToFit()
+            labelSize = labelLabel.sizeThatFits(CGSizeMake(self.view.bounds.size.width - 8 * 2, CGFloat.greatestFiniteMagnitude))
         }
-        view.addSubview(labelLabel)
+        labelLabel.frame = CGRect(
+            x: 8,
+            y: topPadding + navHeight + 8,
+            width: labelSize.width,
+            height: labelSize.height
+        )
         
         // Setup location elements
         locationBackground.layer.cornerRadius = 8
         locationBackground.clipsToBounds = true
+        locationBackground.alpha = 0.5
         view.addSubview(locationBackground)
         
         locationLabel.textColor = .white
@@ -90,12 +114,6 @@ class PhotoPreviewViewController: UIViewController {
         }
         view.addSubview(locationLabel)
         
-        // Calculate offsets and sizes
-        let elementSize = CGSize(width: 120, height: 40)
-        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-        let window = windowScene?.windows.first(where: { $0.isKeyWindow })
-        let topPadding = window?.safeAreaInsets.top ?? 0
-        let navHeight = navigationController?.navigationBar.frame.height ?? 0
         // Position score at top right
         scoreBackground.frame = CGRect(
             x: view.bounds.width - elementSize.width,
@@ -105,14 +123,10 @@ class PhotoPreviewViewController: UIViewController {
         )
         scoreLabel.frame = scoreBackground.frame
         
-        // Position label at top left
-        labelBackground.frame = CGRect(
-            x: 0,
-            y: topPadding + navHeight,
-            width: elementSize.width,
-            height: elementSize.height
-        )
-        labelBackground.frame.size.width = labelLabel.bounds.size.width + 16
+        labelBackground.frame.size.width = labelLabel.bounds.size.width + 8 * 2
+        labelBackground.frame.size.height = labelLabel.bounds.size.height + 8 * 2
+        labelBackground.frame.origin.y = self.view.bounds.size.height - labelBackground.frame.size.height - 8 //CGRectGetMaxY(scoreBackground.frame) + 8
+        labelBackground.frame.origin.x = (self.view.bounds.size.width - labelBackground.frame.size.width) / 2.0
         labelLabel.center = labelBackground.center
         
         // Position location below label

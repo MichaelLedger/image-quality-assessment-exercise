@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "C2EF380F22D8C85100C332BF"
-               BuildableName = "TensorFlowLite_model_test.app"
-               BlueprintName = "TensorFlowLite_model_test"
+               BuildableName = "bestPhoto.app"
+               BlueprintName = "bestPhoto"
                ReferencedContainer = "container:TensorFlowLite_model_test.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -27,19 +27,17 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
-      <Testables>
-      </Testables>
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C2EF380F22D8C85100C332BF"
-            BuildableName = "TensorFlowLite_model_test.app"
-            BlueprintName = "TensorFlowLite_model_test"
+            BuildableName = "bestPhoto.app"
+            BlueprintName = "bestPhoto"
             ReferencedContainer = "container:TensorFlowLite_model_test.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
-      <AdditionalOptions>
-      </AdditionalOptions>
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -56,8 +54,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C2EF380F22D8C85100C332BF"
-            BuildableName = "TensorFlowLite_model_test.app"
-            BlueprintName = "TensorFlowLite_model_test"
+            BuildableName = "bestPhoto.app"
+            BlueprintName = "bestPhoto"
             ReferencedContainer = "container:TensorFlowLite_model_test.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -74,8 +72,6 @@
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
-      <AdditionalOptions>
-      </AdditionalOptions>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -88,8 +84,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C2EF380F22D8C85100C332BF"
-            BuildableName = "TensorFlowLite_model_test.app"
-            BlueprintName = "TensorFlowLite_model_test"
+            BuildableName = "bestPhoto.app"
+            BlueprintName = "bestPhoto"
             ReferencedContainer = "container:TensorFlowLite_model_test.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

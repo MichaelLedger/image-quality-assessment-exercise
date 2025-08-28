@@ -8,6 +8,20 @@ actor LocationManager {
     private let geocoder = CLGeocoder()
     private var locationCache: [String: String] = [:]  // key: "lat,lon", value: location name
     
+    private func reverseGeocode(_ location: CLLocation) async throws -> [CLPlacemark] {
+        try await withCheckedThrowingContinuation { continuation in
+            geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let placemarks = placemarks {
+                    continuation.resume(returning: placemarks)
+                } else {
+                    continuation.resume(returning: [])
+                }
+            }
+        }
+    }
+    
     func getLocationName(for location: CLLocation) async -> String {
         // Check cache first
         let cacheKey = "\(location.coordinate.latitude),\(location.coordinate.longitude)"
@@ -16,7 +30,7 @@ actor LocationManager {
         }
         
         do {
-            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            let placemarks = try await reverseGeocode(location)
             if let placemark = placemarks.first {
                 var components: [String] = []
                 if let country = placemark.country { components.append(country) }
@@ -24,7 +38,7 @@ actor LocationManager {
                 if let locality = placemark.locality { components.append(locality) }
                 if let subLocality = placemark.subLocality { components.append(subLocality) }
                 
-                let locationName = components.joined(separator: " ")
+                let locationName = components.joined(separator: ", ")
                 locationCache[cacheKey] = locationName
                 return locationName
             }
@@ -32,7 +46,7 @@ actor LocationManager {
             print("Geocoding error: \(error.localizedDescription)")
         }
         
-        return "Unkown Location"
+        return "Unknown Location"
     }
     
     func clearCache() {

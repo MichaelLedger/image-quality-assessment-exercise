@@ -118,10 +118,10 @@ extension PhotoManager {
         do {
             try handler.perform([request])
             
-            // Get results sorted by confidence
-            if let observations = request.results?.filter({ $0.confidence > 0.75 }),
-               let topObservation = observations.first {
-                let label = topObservation.identifier.lowercased()
+            // Get all observations with confidence > 0.75 and join their identifiers
+            if let observations = request.results?.filter({ $0.confidence > 0.75 }).sorted(by: { $0.confidence > $1.confidence }) {
+                let labels = observations.map { $0.identifier.lowercased() }
+                let label = labels.joined(separator: "/")
                 setCachedLabel(label, for: asset.localIdentifier)
                 return label
             }

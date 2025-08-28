@@ -157,17 +157,18 @@ class PhotoCell: UICollectionViewCell {
         // Setup label background and label
         labelBackground.layer.cornerRadius = 4
         labelBackground.clipsToBounds = true
+        labelBackground.alpha = 0.5
         contentView.addSubview(labelBackground)
         
         labelLabel.textColor = .white
-        labelLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        labelLabel.font = .systemFont(ofSize: 8, weight: .medium)
         labelLabel.textAlignment = .center
-        labelLabel.numberOfLines = 1
+        labelLabel.numberOfLines = 0
         contentView.addSubview(labelLabel)
         
         // Position elements
         let padding: CGFloat = 4
-        let elementHeight: CGFloat = 20
+        let elementHeight: CGFloat = 30
         let scoreWidth: CGFloat = 50
         
         // Position score at top right
@@ -203,17 +204,18 @@ class PhotoCell: UICollectionViewCell {
             labelLabel.text = label
             
             // Calculate the size needed for the text
-            let padding: CGFloat = 8 // Extra padding for text
-            let maxWidth = UIScreen.main.bounds.width - padding * 2
-            let labelSize = (label as NSString).size(withAttributes: [.font: labelLabel.font!])
+            let padding: CGFloat = 2 // Extra padding for text
+            let maxWidth = self.contentView.bounds.size.width - padding * 2
+            // let labelSize = (label as NSString).size(withAttributes: [.font: labelLabel.font!])
+            let labelSize = labelLabel.sizeThatFits(CGSize(width: maxWidth, height: CGFloat.greatestFiniteMagnitude))
             let labelWidth = min(max(labelSize.width + padding * 2, 60), maxWidth) // Min width 60, max width full screen
             
             // Center the label horizontally
             let x = (contentView.bounds.width - labelWidth) / 2
-            let y = contentView.bounds.height - labelLabel.frame.height - 4
+            let y = contentView.bounds.height - labelSize.height - 4
             
             // Update frames
-            labelLabel.frame = CGRect(x: x, y: y, width: labelWidth, height: labelLabel.frame.height)
+            labelLabel.frame = CGRect(x: x, y: y, width: labelWidth, height: labelSize.height)
             labelBackground.frame = labelLabel.frame
             
             labelBackground.isHidden = false

@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14490.70" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="jMT-p3-LxJ">
-    <device id="retina6_1" orientation="portrait">
-        <adaptation id="fullscreen"/>
-    </device>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23727" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="jMT-p3-LxJ">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14490.49"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23721"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -13,13 +11,13 @@
         <!--Image Scorer-->
         <scene sceneID="tne-QT-ifu">
             <objects>
-                <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="TensorFlowLite_model_test" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="bestPhoto" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" distribution="equalSpacing" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="iH2-Ez-U5i">
-                                <rect key="frame" x="0.0" y="88" width="414" height="774"/>
+                                <rect key="frame" x="0.0" y="140" width="414" height="688"/>
                                 <subviews>
                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="252" translatesAutoresizingMaskIntoConstraints="NO" id="irO-sH-v5t">
                                         <rect key="frame" x="0.0" y="0.0" width="414" height="300"/>
@@ -28,24 +26,24 @@
                                         </constraints>
                                     </imageView>
                                     <pickerView contentMode="scaleToFill" semanticContentAttribute="spatial" horizontalHuggingPriority="251" verticalHuggingPriority="251" verticalCompressionResistancePriority="749" translatesAutoresizingMaskIntoConstraints="NO" id="SEk-3l-gfp">
-                                        <rect key="frame" x="0.0" y="349" width="414" height="216"/>
+                                        <rect key="frame" x="0.0" y="327.5" width="414" height="216"/>
                                         <variation key="heightClass=compact" hidden="YES"/>
                                     </pickerView>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="iBj-WV-CAc">
-                                        <rect key="frame" x="0.0" y="614.5" width="414" height="20.5"/>
+                                        <rect key="frame" x="0.0" y="571.5" width="414" height="20.5"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="17"/>
                                         <nil key="highlightedColor"/>
                                         <variation key="heightClass=compact" hidden="YES"/>
                                     </label>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="J1l-o3-nu3">
-                                        <rect key="frame" x="0.0" y="684" width="414" height="20.5"/>
+                                        <rect key="frame" x="0.0" y="619.5" width="414" height="20.5"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                         <variation key="heightClass=compact" hidden="YES"/>
                                     </label>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="Cnu-fh-KW8">
-                                        <rect key="frame" x="0.0" y="753.5" width="414" height="20.5"/>
+                                        <rect key="frame" x="0.0" y="667.5" width="414" height="20.5"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
@@ -62,20 +60,21 @@
                                 </constraints>
                                 <variation key="default">
                                     <mask key="constraints">
-                                        <exclude reference="5yS-zw-8c9"/>
                                         <exclude reference="BRt-W8-Rtm"/>
+                                        <exclude reference="5yS-zw-8c9"/>
                                         <exclude reference="eae-aS-Olm"/>
                                     </mask>
                                 </variation>
                                 <variation key="heightClass=compact">
                                     <mask key="constraints">
-                                        <exclude reference="5yS-zw-8c9"/>
                                         <exclude reference="BRt-W8-Rtm"/>
+                                        <exclude reference="5yS-zw-8c9"/>
                                         <include reference="eae-aS-Olm"/>
                                     </mask>
                                 </variation>
                             </stackView>
                         </subviews>
+                        <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="iH2-Ez-U5i" secondAttribute="bottom" id="6VH-Du-dDU"/>
@@ -91,46 +90,45 @@
                             <constraint firstItem="iH2-Ez-U5i" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="sSg-6t-eao"/>
                             <constraint firstItem="iH2-Ez-U5i" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" id="xfS-Uk-Nk0"/>
                         </constraints>
-                        <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <variation key="default">
                             <mask key="constraints">
-                                <exclude reference="6VH-Du-dDU"/>
                                 <exclude reference="WlP-3o-QIN"/>
+                                <exclude reference="6VH-Du-dDU"/>
+                                <exclude reference="GMa-jv-o2q"/>
+                                <exclude reference="sSg-6t-eao"/>
+                                <exclude reference="JuZ-aa-NhT"/>
+                                <exclude reference="bjJ-N5-9wb"/>
                                 <exclude reference="6u1-me-YjS"/>
                                 <exclude reference="8Os-mF-wfA"/>
-                                <exclude reference="BHx-zP-4Li"/>
-                                <exclude reference="GMa-jv-o2q"/>
                                 <exclude reference="HmS-Rk-VxE"/>
-                                <exclude reference="JuZ-aa-NhT"/>
                                 <exclude reference="bNa-ql-ZV4"/>
-                                <exclude reference="bjJ-N5-9wb"/>
-                                <exclude reference="sSg-6t-eao"/>
+                                <exclude reference="BHx-zP-4Li"/>
                                 <exclude reference="xfS-Uk-Nk0"/>
                             </mask>
                         </variation>
                         <variation key="heightClass=compact">
                             <mask key="constraints">
-                                <include reference="6u1-me-YjS"/>
-                                <include reference="BHx-zP-4Li"/>
                                 <exclude reference="GMa-jv-o2q"/>
-                                <include reference="HmS-Rk-VxE"/>
-                                <exclude reference="JuZ-aa-NhT"/>
-                                <include reference="bNa-ql-ZV4"/>
-                                <exclude reference="bjJ-N5-9wb"/>
                                 <exclude reference="sSg-6t-eao"/>
+                                <exclude reference="JuZ-aa-NhT"/>
+                                <exclude reference="bjJ-N5-9wb"/>
+                                <include reference="6u1-me-YjS"/>
+                                <include reference="HmS-Rk-VxE"/>
+                                <include reference="bNa-ql-ZV4"/>
+                                <include reference="BHx-zP-4Li"/>
                             </mask>
                         </variation>
                         <variation key="heightClass=regular">
                             <mask key="constraints">
-                                <include reference="6VH-Du-dDU"/>
                                 <include reference="WlP-3o-QIN"/>
+                                <include reference="6VH-Du-dDU"/>
                                 <include reference="8Os-mF-wfA"/>
                                 <include reference="xfS-Uk-Nk0"/>
                             </mask>
                         </variation>
                     </view>
                     <navigationItem key="navigationItem" title="Image Scorer" id="LNj-vz-Mju">
-                        <barButtonItem key="rightBarButtonItem" title="Show Best" id="EDv-Sr-wGi">
+                        <barButtonItem key="rightBarButtonItem" title="Show Best" hidden="YES" id="EDv-Sr-wGi">
                             <connections>
                                 <segue destination="zhP-AV-Nim" kind="show" identifier="showBestSegue" id="jvM-UT-Wbz"/>
                             </connections>
@@ -151,19 +149,19 @@
         <!--The Best Image-->
         <scene sceneID="ECI-dZ-Bhm">
             <objects>
-                <viewController title="The Best Image" id="zhP-AV-Nim" customClass="BestViewController" customModule="TensorFlowLite_model_test" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController title="The Best Image" id="zhP-AV-Nim" customClass="BestViewController" customModule="bestPhoto" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="zoR-ru-Tle">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" distribution="fillEqually" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="qPx-4X-Wzr">
-                                <rect key="frame" x="0.0" y="88" width="414" height="774"/>
+                                <rect key="frame" x="0.0" y="140" width="414" height="688"/>
                                 <subviews>
                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="a4h-FE-BOM">
-                                        <rect key="frame" x="0.0" y="0.0" width="414" height="383"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="414" height="340"/>
                                     </imageView>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="252" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="HzM-FE-qMF">
-                                        <rect key="frame" x="0.0" y="391" width="414" height="383"/>
+                                        <rect key="frame" x="0.0" y="348" width="414" height="340"/>
                                         <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="20"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
@@ -172,6 +170,7 @@
                                 </subviews>
                             </stackView>
                         </subviews>
+                        <viewLayoutGuide key="safeArea" id="cSf-vm-hcP"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="cSf-vm-hcP" firstAttribute="trailing" secondItem="qPx-4X-Wzr" secondAttribute="trailing" id="Lkh-HT-Mrl"/>
@@ -179,7 +178,6 @@
                             <constraint firstItem="qPx-4X-Wzr" firstAttribute="leading" secondItem="cSf-vm-hcP" secondAttribute="leading" id="ZIv-eE-YdA"/>
                             <constraint firstItem="cSf-vm-hcP" firstAttribute="bottom" secondItem="qPx-4X-Wzr" secondAttribute="bottom" id="yeH-ur-4lv"/>
                         </constraints>
-                        <viewLayoutGuide key="safeArea" id="cSf-vm-hcP"/>
                     </view>
                     <connections>
                         <outlet property="bestImageView" destination="a4h-FE-BOM" id="beE-Jm-jzi"/>
@@ -196,7 +194,7 @@
                 <navigationController automaticallyAdjustsScrollViewInsets="NO" id="jMT-p3-LxJ" sceneMemberID="viewController">
                     <toolbarItems/>
                     <navigationBar key="navigationBar" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="U5C-Vp-4vE">
-                        <rect key="frame" x="0.0" y="44" width="414" height="44"/>
+                        <rect key="frame" x="0.0" y="96" width="414" height="44"/>
                         <autoresizingMask key="autoresizingMask"/>
                     </navigationBar>
                     <nil name="viewControllers"/>

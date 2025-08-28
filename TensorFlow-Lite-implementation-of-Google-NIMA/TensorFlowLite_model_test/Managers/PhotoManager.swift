@@ -9,6 +9,7 @@ public enum PreferenceKeys {
     static let maxPhotoCount = "maxPhotoCount"
     static let requiredLabels = "requiredLabels"
     static let excludedLabels = "excludedLabels"
+    static let resetOnce = "resetOnce"
 }
 
 actor PhotoManager {
@@ -20,8 +21,19 @@ actor PhotoManager {
         get {
             return UserDefaults.standard.integer(forKey: PreferenceKeys.maxPhotoCount)
         }
+    }
+    
+    public func updateMaxPhotoCount(_ count: Int) {
+        UserDefaults.standard.set(count, forKey: PreferenceKeys.maxPhotoCount)
+        UserDefaults.standard.synchronize()
+    }
+    
+    public var resetOnce: Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: PreferenceKeys.resetOnce)
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: PreferenceKeys.maxPhotoCount)
+            UserDefaults.standard.set(newValue, forKey: PreferenceKeys.resetOnce)
             UserDefaults.standard.synchronize()
         }
     }
@@ -34,21 +46,9 @@ actor PhotoManager {
      "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
      "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
      "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
-     "canyon", "bride", "joker", "selfie", "storm", "skin"]
+     "canyon", "bride", "joker", "selfie", "storm", "skin"] //"outdoor", "animal", "recreation"
     
-    //test
-    /*
-     let defaultLabels: Set<String> = ["team", "bonfire", "park", "graduation", "ferrisWheel", "wetsuit", "brig", "competition", "safari", "stadium",
-     "smile", "surfboard", "sunset", "sky", "interaction", "person", "windsurfing", "swimwear", "camping", "playground",
-     "concert", "prom", "bar", "nightclub", "christmas", "jungle", "skyline", "skateboarder", "dance", "santaClaus", "thanksgiving", "sledding", "vacation", "pitch", "monument", "speedboat", "food", "forest", "waterfall",
-     "desert", "grandparent", "love", "motorcycle", "leisure", "lake", "moon", "marriage", "party", "plant", "pet", "skateboard",
-     "rugby", "river", "star", "sports", "swimming", "superman", "superhero", "skiing", "skyscraper", "volcano", "tattoo",
-     "ranch", "fishing", "mountain", "singer", "carnival", "snowboarding", "beach", "rainbow", "garden", "flower", "cathedral",
-     "castle", "aurora", "racing", "fun", "cake", "fireworks", "prairie", "sailboat", "supper", "waterfall", "lunch", "baby",
-     "canyon", "bride", "joker", "selfie", "storm", "skin", "outdoor", "document", "animal", "recreation"]
-     */
-    
-    public let defaultExcludedLabels: Set<String> =  ["document"]
+    public let defaultExcludedLabels: Set<String> =  ["document", "screenshot"]
     
     public var excludedLabels: Set<String> {
         get {
@@ -82,13 +82,33 @@ actor PhotoManager {
         }
     }
     
-    private init() {}
+    private init() {
+        Task {
+            await initialize()
+        }
+    }
+    
+    private func initialize() async {
+        let needReset = !resetOnce
+        if needReset {
+            resetToDefaultLabels()
+            resetOnce = true
+        }
+    }
     
     // MARK: - Reset to default labels
     
     public func resetToDefaultLabels() {
         requiredLabels = defaultLabels
         excludedLabels = defaultExcludedLabels
+    }
+    
+    public func updateRequiredLabels(_ labels: Set<String>) {
+        requiredLabels = labels
+    }
+    
+    public func updateExcludedLabels(_ labels: Set<String>) {
+        excludedLabels = labels
     }
     
     // MARK: - Authorization
@@ -157,10 +177,26 @@ actor PhotoManager {
         return await processPhotosInParallel(assets: assets)
     }
     
-    private func processPhotosInParallel(assets: PHFetchResult<PHAsset>) async -> [SelectedPhoto] {
+    private actor PhotoProcessingState {
         var processedIdentifiers = Set<String>()
-        let identifiersLock = NSLock()
         var counter = 0
+        
+        func incrementCounter() -> Int {
+            counter += 1
+            return counter
+        }
+        
+        func checkAndAddIdentifier(_ identifier: String) -> Bool {
+            let isDuplicate = processedIdentifiers.contains(identifier)
+            if !isDuplicate {
+                processedIdentifiers.insert(identifier)
+            }
+            return isDuplicate
+        }
+    }
+    
+    private func processPhotosInParallel(assets: PHFetchResult<PHAsset>) async -> [SelectedPhoto] {
+        let state = PhotoProcessingState()
         
         // Convert PHFetchResult to Array to avoid closure capture issues
         var assetsArray: [PHAsset] = []
@@ -186,10 +222,8 @@ actor PhotoManager {
                 
                 if let photo = await processPhoto(
                     asset: asset,
-                    counter: &counter,
                     totalCount: assets.count,
-                    processedIdentifiers: &processedIdentifiers,
-                    identifiersLock: identifiersLock
+                    state: state
                 ) {
                     allPhotos.append(photo)
                     print("Batch \(batchNumber): Successfully processed photo \(index + 1)/\(batchAssets.count)")
@@ -205,20 +239,14 @@ actor PhotoManager {
     
     private func processPhoto(
         asset: PHAsset,
-        counter: inout Int,
         totalCount: Int,
-        processedIdentifiers: inout Set<String>,
-        identifiersLock: NSLock
+        state: PhotoProcessingState
     ) async -> SelectedPhoto? {
-        counter += 1
+        let counter = await state.incrementCounter()
         print("Processing photo \(counter)/\(totalCount): \(asset.localIdentifier)")
         
         // Check for duplicates
-        identifiersLock.lock()
-        let isDuplicate = processedIdentifiers.contains(asset.localIdentifier)
-        processedIdentifiers.insert(asset.localIdentifier)
-        identifiersLock.unlock()
-        
+        let isDuplicate = await state.checkAndAddIdentifier(asset.localIdentifier)
         if isDuplicate {
             print("Duplicate photo skipped: \(asset.localIdentifier)")
             return nil
@@ -279,128 +307,122 @@ actor PhotoManager {
         labelCache.removeAll()
     }
     
+    func updateLabelCacheWithDictionary(_ newEntries: [String: String]) {
+        labelCache.merge(newEntries) { _, new in new }
+    }
+    
     // MARK: - Photo Fetching
     
-    func fetchMomentsAlbums(fetchLimit: Int = 1000, completion: @escaping ([ScoredPhoto]) -> Void) {
-        // Request photo library access
-        PHPhotoLibrary.requestAuthorization { [weak self] status in
-            guard let self = self, status == .authorized else {
-                DispatchQueue.main.async { completion([]) }
-                return
+    func fetchMomentsAlbums(fetchLimit: Int = 1000) async throws -> [ScoredPhoto] {
+        // Request photo library authorization
+        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        guard status == .authorized else {
+            return []
+        }
+        
+        // Fetch moments collections
+        let result = PHAssetCollection.fetchMoments(with: nil)
+        var locationGroups: [[PHAsset]] = []
+        
+        // Collect moments with locations first
+        var momentsWithLocation: [PHAssetCollection] = []
+        result.enumerateObjects { collection, _, _ in
+            if collection.approximateLocation != nil {
+                momentsWithLocation.append(collection)
+            }
+        }
+        
+        // Process moments concurrently
+        await withTaskGroup(of: [PHAsset].self) { group in
+            // Add tasks for each moment
+            for collection in momentsWithLocation {
+                group.addTask {
+                    // Create fetch options within the task to avoid data races
+                    let taskFetchOptions = PHFetchOptions()
+                    taskFetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                    taskFetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
+                    
+                    let assetsInMoment = PHAsset.fetchAssets(in: collection, options: taskFetchOptions)
+                    var momentAssets: [PHAsset] = []
+                    
+                    assetsInMoment.enumerateObjects { asset, _, _ in
+                        momentAssets.append(asset)
+                    }
+                    
+                    return momentAssets
+                }
             }
             
-            Task {
-                // Fetch moments collections
-                let result = PHAssetCollection.fetchMoments(with: nil)
-                var locationGroups: [[PHAsset]] = []
-                //let groupLock = NSLock()
-                let fetchOptions = PHFetchOptions()
-                fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-                fetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
-                
-                // Collect moments with locations first
-                var momentsWithLocation: [PHAssetCollection] = []
-                result.enumerateObjects { collection, _, _ in
-                    if collection.approximateLocation != nil {
-                        momentsWithLocation.append(collection)
-                    }
-                }
-                
-                // Process moments concurrently
-                await withTaskGroup(of: [PHAsset].self) { group in
-                    // Add tasks for each moment
-                    for collection in momentsWithLocation {
-                        group.addTask {
-                            let assetsInMoment = PHAsset.fetchAssets(in: collection, options: fetchOptions)
-                            var momentAssets: [PHAsset] = []
-                            
-                            assetsInMoment.enumerateObjects { asset, _, _ in
-                                momentAssets.append(asset)
-                            }
-                            
-                            return momentAssets
-                        }
-                    }
-                    
-                    // Collect results
-                    for await momentAssets in group {
-                        if !momentAssets.isEmpty {
-                            //groupLock.lock()
-                            locationGroups.append(momentAssets)
-                            //groupLock.unlock()
-                        }
-                    }
-                }
-                
-                // Flatten and limit photos while preserving groups
-                var photos: [PHAsset] = []
-                for group in locationGroups {
-                    if photos.count >= fetchLimit { break }
-                    photos.append(contentsOf: group.prefix(fetchLimit - photos.count))
-                }
-                
-                // Group photos by moment
-                let groupedPhotos = Dictionary(grouping: photos) { photo in
-                    var momentKey = photo.creationDate?.description ?? "Unknown"
-                    
-                    // Find the moment that contains this photo
-                    result.enumerateObjects { moment, _, stop in
-                        let assets = PHAsset.fetchAssets(in: moment, options: nil)
-                        if assets.contains(photo) {
-                            momentKey = "\(moment.localizedTitle ?? "") - \(moment.approximateLocation?.coordinate.latitude ?? 0),\(moment.approximateLocation?.coordinate.longitude ?? 0)"
-                            stop.pointee = true
-                        }
-                    }
-                    
-                    return momentKey
-                }
-                
-                var scoredPhotos: [ScoredPhoto] = []
-                
-                // Process each date group
-                for (_, datePhotos) in groupedPhotos {
-                    // Filter similar photos within the group
-                    var labelCache: [String: String] = [:]
-                    let filteredPhotos = await self.filterPhotos(datePhotos, labelCache: &labelCache)
-                    self.labelCache = labelCache
-                    
-                    // Process each filtered photo
-                    for photo in filteredPhotos {
-                        // Get label
-                        let label = await self.detectImageLabel(for: photo)
-                        
-                        // Score the photo using Vision
-                        if #available(iOS 18.0, *),
-                           let score = await self.scoreByVision(photo) {
-                            // Get location name if available
-                            var locationName: String? = nil
-                            if let location = photo.location {
-                                locationName = await LocationManager.shared.getLocationName(for: location)
-                            }
-                            
-                            let scoredPhoto = ScoredPhoto(
-                                assetIdentifier: photo.localIdentifier,
-                                localImageName: nil,
-                                modificationDate: photo.modificationDate,
-                                score: score,
-                                label: label,
-                                location: photo.location,
-                                locationName: locationName
-                            )
-                            scoredPhotos.append(scoredPhoto)
-                        }
-                    }
-                }
-                
-                // Sort by score (highest first)
-                let sortedPhotos = scoredPhotos.sorted { $0.score > $1.score }
-                
-                // Return on main thread
-                DispatchQueue.main.async {
-                    completion(sortedPhotos)
+            // Collect results
+            for await momentAssets in group {
+                if !momentAssets.isEmpty {
+                    locationGroups.append(momentAssets)
                 }
             }
         }
+        
+        // Flatten and limit photos while preserving groups
+        var photos: [PHAsset] = []
+        for group in locationGroups {
+            if photos.count >= fetchLimit { break }
+            photos.append(contentsOf: group.prefix(fetchLimit - photos.count))
+        }
+        
+        // Group photos by moment
+        let groupedPhotos = Dictionary(grouping: photos) { photo in
+            var momentKey = photo.creationDate?.description ?? "Unknown"
+            
+            // Find the moment that contains this photo
+            result.enumerateObjects { moment, _, stop in
+                let assets = PHAsset.fetchAssets(in: moment, options: nil)
+                if assets.contains(photo) {
+                    momentKey = "\(moment.localizedTitle ?? "") - \(moment.approximateLocation?.coordinate.latitude ?? 0),\(moment.approximateLocation?.coordinate.longitude ?? 0)"
+                    stop.pointee = true
+                }
+            }
+            
+            return momentKey
+        }
+        
+        var scoredPhotos: [ScoredPhoto] = []
+        
+        // Process each date group
+        for (_, datePhotos) in groupedPhotos {
+            // Filter similar photos within the group
+            var labelCache: [String: String] = [:]
+            let filteredPhotos = await self.filterPhotos(datePhotos, labelCache: &labelCache)
+            self.updateLabelCacheWithDictionary(labelCache)
+            
+            // Process each filtered photo
+            for photo in filteredPhotos {
+                // Get label
+                let label = await self.detectImageLabel(for: photo)
+                
+                // Score the photo using Vision
+                if #available(iOS 18.0, *),
+                   let score = await self.scoreByVision(photo) {
+                    // Get location name if available
+                    var locationName: String? = nil
+                    if let location = photo.location {
+                        locationName = await LocationManager.shared.getLocationName(for: location)
+                    }
+                    
+                    let scoredPhoto = ScoredPhoto(
+                        assetIdentifier: photo.localIdentifier,
+                        localImageName: nil,
+                        modificationDate: photo.modificationDate,
+                        score: score,
+                        label: label,
+                        location: photo.location,
+                        locationName: locationName
+                    )
+                    scoredPhotos.append(scoredPhoto)
+                }
+            }
+        }
+        
+        // Sort by score (highest first)
+        return scoredPhotos.sorted { $0.score > $1.score }
     }
     
     // MARK: - Photo Scoring
@@ -425,7 +447,7 @@ actor PhotoManager {
               let _ = originalImg.cgImage else {
             return nil
         }
-        let image = PhotoManager.resizeImageIfNeeded(originalImg)
+        let image = resizeImageIfNeeded(originalImg)
         guard let cgImage = image.cgImage, cgImage.width >= 224, cgImage.height >= 224 else {
             return nil
         }
@@ -538,26 +560,7 @@ actor PhotoManager {
         return (aestheticScore + technicalScore) / 2
     }
     
-    static func resizeImageIfNeeded(_ image: UIImage) -> UIImage {
-        // If image is already large enough, return as is
-        if image.size.width >= 224 && image.size.height >= 224 {
-            return image
-        }
-        
-        // Calculate scale needed to make both dimensions >= 224
-        let widthRatio = 224 / image.size.width
-        let heightRatio = 224 / image.size.height
-        let scale = max(widthRatio, heightRatio)
-        let newSize = CGSize(
-            width: image.size.width * scale,
-            height: image.size.height * scale
-        )
-        
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        return resizedImage ?? image
+    public func resizeImageIfNeeded(_ image: UIImage) -> UIImage {
+        image.resizedToMinimumDimension(224)
     }
 }

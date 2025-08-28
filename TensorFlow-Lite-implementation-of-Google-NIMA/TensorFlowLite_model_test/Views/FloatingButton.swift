@@ -22,7 +22,7 @@ class FloatingButton: UIButton {
         // Set image with configuration
         if #available(iOS 13.0, *) {
             let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
-            let image = UIImage(systemName: "photo.stack", withConfiguration: config)
+            let image = UIImage(systemName: "wand.and.stars", withConfiguration: config)//UIImage(systemName: "photo.stack", withConfiguration: config)
             setImage(image, for: .normal)
             tintColor = .white
         } else {

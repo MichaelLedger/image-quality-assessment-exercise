@@ -112,39 +112,41 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                            "people-3104635_640",
                            "person-1245959_640"]
      
+    @MainActor
     internal func configureMaxPhotoCount() {
-        let alert = UIAlertController(
-            title: "Configure Photo Limit",
-            message: "Enter maximum number of photos to analyze (0 for no limit)",
-            preferredStyle: .alert
-        )
-        
-        alert.addTextField { textField in
-            textField.keyboardType = .numberPad
-            textField.text = String(PhotoManager.shared.maxPhotoCount)
-            textField.placeholder = "Enter number (0 for no limit)"
-        }
-        
-        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-            guard let self = self,
-                  let text = alert.textFields?.first?.text,
-                  let count = Int(text) else { return }
+        Task {
+            let currentCount = await PhotoManager.shared.maxPhotoCount
             
-            PhotoManager.shared.maxPhotoCount = count
-            self.checkPhotoLibraryAuthorizationAndFetchPhotos()
-        })
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        present(alert, animated: true)
+            let alert = UIAlertController(
+                title: "Configure Photo Limit",
+                message: "Enter maximum number of photos to analyze (0 for no limit)",
+                preferredStyle: .alert
+            )
+            
+            alert.addTextField { textField in
+                textField.keyboardType = .numberPad
+                textField.text = String(currentCount)
+                textField.placeholder = "Enter number (0 for no limit)"
+            }
+            
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                guard let self = self,
+                      let text = alert.textFields?.first?.text,
+                      let count = Int(text) else { return }
+                
+                Task {
+                    await PhotoManager.shared.updateMaxPhotoCount(count)
+                    self.checkPhotoLibraryAuthorizationAndFetchPhotos()
+                }
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            present(alert, animated: true)
+        }
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // Set default values if not already set
-        if UserDefaults.standard.object(forKey: PreferenceKeys.maxPhotoCount) == nil {
-            PhotoManager.shared.maxPhotoCount = 5 // Default value //test
-        }
         
         // Setup score range label
         //        scoreRangeLabel = UILabel()
@@ -168,10 +170,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             let config = UIImage.SymbolConfiguration(pointSize: 21, weight: .medium)
             
             // Right button - Photo Library
-            let photoImage = UIImage(systemName: "photo.on.rectangle", withConfiguration: config)
-            let testPhotosButton = UIBarButtonItem(image: photoImage, style: .plain, target: self, action: #selector(testPhotosButtonTapped))
-            
-            navigationItem.rightBarButtonItem = testPhotosButton
+            //let photoImage = UIImage(systemName: "photo.on.rectangle", withConfiguration: config)
+            //let testPhotosButton = UIBarButtonItem(image: photoImage, style: .plain, target: self, action: #selector(testPhotosButtonTapped))
+            //navigationItem.rightBarButtonItem = testPhotosButton
             
             // Left buttons
             let gridImage = UIImage(systemName: "square.grid.3x3", withConfiguration: config)
@@ -183,8 +184,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             navigationItem.leftBarButtonItems = [showGridButton, bestPhotoButton]
         } else {
             // Fallback for iOS 12 and earlier
-            let testPhotosButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(testPhotosButtonTapped))
-            navigationItem.rightBarButtonItem = testPhotosButton
+            //let testPhotosButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(testPhotosButtonTapped))
+            //navigationItem.rightBarButtonItem = testPhotosButton
             
             // Left buttons for iOS 12
             let showGridButton = UIBarButtonItem(title: "Grid", style: .plain, target: self, action: #selector(showScoredPhotosButtonTapped))
@@ -387,9 +388,14 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             let startTime = Date()
             
+            // Set default values if not already set
+            if UserDefaults.standard.object(forKey: PreferenceKeys.maxPhotoCount) == nil {
+                await PhotoManager.shared.updateMaxPhotoCount(50) // Default value //test
+            }
             // Fetch photos using shared manager
             let photos = await PhotoManager.shared.fetchRecentPhotos(maxPhotoCount: PhotoManager.shared.maxPhotoCount)
             
+            let currentCount = await PhotoManager.shared.maxPhotoCount
             // Update UI on main thread
             await MainActor.run {
                 self.selectedPhotos = photos
@@ -402,7 +408,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                     // Show completion alert with processing time
                     let completionAlert = UIAlertController(
                         title: "Photos Filtered and Loaded",
-                        message: "Fetched \(self.selectedPhotos.count) photos from \(PhotoManager.shared.maxPhotoCount) in \(String(format: "%.2f", processingTime)) seconds",
+                        message: "Fetched \(self.selectedPhotos.count) photos from \(currentCount) in \(String(format: "%.2f", processingTime)) seconds",
                         preferredStyle: .alert
                     )
                     completionAlert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -437,25 +443,26 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
-    @objc private func testPhotosButtonTapped() {
-        PHPhotoLibrary.requestAuthorization { [weak self] status in
-            guard let self = self else { return }
-            
-            DispatchQueue.main.async {
-                switch status {
-                case .authorized:
-                    self.showImagePicker()
-                case .denied:
-                    self.showPhotoLibraryAccessAlert()
-                case .notDetermined:
-                    // The user hasn't determined this yet, request authorization will be called again
-                    break
-                case .limited, .restricted:
-                    // Show picker with option to add more photos
-                    self.showImagePickerWithLimitedAccess()
-                @unknown default:
-                    break
-                }
+    @objc private func testPhotosButtonTapped() async {
+        await requestAuthorizationForTestPhotos()
+    }
+    
+    private func requestAuthorizationForTestPhotos() async {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        DispatchQueue.main.async {
+            switch status {
+            case .authorized:
+                self.showImagePicker()
+            case .denied:
+                self.showPhotoLibraryAccessAlert()
+            case .notDetermined:
+                // The user hasn't determined this yet, request authorization will be called again
+                break
+            case .limited, .restricted:
+                // Show picker with option to add more photos
+                self.showImagePickerWithLimitedAccess()
+            @unknown default:
+                break
             }
         }
     }
@@ -575,196 +582,145 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
     }
     
-    @objc internal func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
-        // Show loading indicator
-        let loadingAlert = UIAlertController(
-            title: "Processing Photos",
-            message: "Analyzing...",
-            preferredStyle: .alert
+    private func processPhoto(_ photo: SelectedPhoto, photosToProcess: [SelectedPhoto]) async -> ScoredPhoto? {
+        // Check if photo was already scored
+        if let scoredPhoto = photosToProcess.first(where: { selected in
+            selected.assetIdentifier == photo.assetIdentifier &&
+            selected.modificationDate == photo.modificationDate &&
+            selected.score != nil
+        }), let score = scoredPhoto.score, score > 0 {
+            return ScoredPhoto(
+                assetIdentifier: photo.assetIdentifier,
+                localImageName: photo.localImageName,
+                modificationDate: photo.modificationDate,
+                score: score,
+                label: photo.label,
+                location: photo.location,
+                locationName: photo.locationName
+            )
+        }
+        
+        // Load and process image
+        guard let image = await photo.loadImage(targetSize: .zero),
+              let cgImage = image.cgImage else {
+            return nil
+        }
+        
+        // Prepare image inputs
+        guard let inputs = prepareImage(fromBestScore: true, withCGImage: cgImage) else {
+            return nil
+        }
+        
+        // Score the image using async/await wrapper
+        let (aestheticScore, technicalScore) = await scoreImage(inputs: inputs)
+        let meanScore = (aestheticScore + technicalScore) / 2
+        
+        // Create scored photo
+        return ScoredPhoto(
+            assetIdentifier: photo.assetIdentifier,
+            localImageName: photo.localImageName,
+            modificationDate: photo.modificationDate,
+            score: meanScore,
+            label: photo.label,
+            location: photo.location,
+            locationName: photo.locationName
         )
-        self.present(loadingAlert, animated: true)
-        processingQueue.async {
-            // Process all selected photos
-            let startTime = Date()
-            let group = DispatchGroup()
-            var newScoredPhotos: [ScoredPhoto] = []
-            for photo in self.selectedPhotos {
-                group.enter()
+    }
+    
+    private func scoreImage(inputs: ModelInputs) async -> (aesthetic: Double, technical: Double) {
+        await withCheckedContinuation { continuation in
+            aestheticInterpreter.run(inputs: inputs, options: ioOptions) { outputs, error in
+                var aesthetic = 0.0
                 
-                // check if photos scored in finding best photo
-                if let scoredPhoto = self.selectedPhotos.first(where: { selected in
-                    selected.assetIdentifier == photo.assetIdentifier &&
-                    selected.modificationDate == photo.modificationDate &&
-                    selected.score != nil
-                }), let score = scoredPhoto.score, score > 0 {
-                    let scoredPhoto = ScoredPhoto(
-                        assetIdentifier: photo.assetIdentifier,
-                        localImageName: photo.localImageName,
-                        modificationDate: photo.modificationDate,
-                        score: score,
-                        label: photo.label,
-                        location: photo.location,
-                        locationName: photo.locationName
-                    )
-                    newScoredPhotos.append(scoredPhoto)
-                    group.leave()
-                    continue
-                }
-                
-                // Check if photo was already scored (by modification date)
-                //            if let existingScore = self.scoredPhotos.first(where: { scored in
-                //                scored.assetIdentifier == photo.assetIdentifier &&
-                //                scored.modificationDate == photo.modificationDate
-                //            }) {
-                //                newScoredPhotos.append(existingScore)
-                //                group.leave()
-                //                continue
-                //            }
-                
-                photo.loadImage(targetSize: .zero) { imageResult in
-                    // Prepare and score local image
-                    guard let image = imageResult,
-                          let cgImage = image.cgImage,
-                          let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
-                        group.leave()
-                        return
+                if error == nil, let outputs = outputs,
+                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
+                    let probabilities = output[0]
+                    for value in probabilities {
+                        guard let index = probabilities.firstIndex(of: value) else { continue }
+                        aesthetic += Double(truncating: value) * Double(index + 1)
                     }
-                    DispatchQueue.main.async {
-                        loadingAlert.message = "Analyzing photo with NIMA..."
-                    }
-                    // Score the image
-                    self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-                        var aestheticScore = 0.0
-                        var technicalScore = 0.0
-                        
+                    
+                    // Run technical model
+                    self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                        var technical = 0.0
                         if error == nil, let outputs = outputs,
                            let output = try? outputs.output(index: 0) as? [[NSNumber]] {
                             let probabilities = output[0]
                             for value in probabilities {
                                 guard let index = probabilities.firstIndex(of: value) else { continue }
-                                aestheticScore += Double(truncating: value) * Double(index + 1)
+                                technical += Double(truncating: value) * Double(index + 1)
                             }
-                            
-                            // Run technical model
-                            self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-                                if error == nil, let outputs = outputs,
-                                   let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-                                    let probabilities = output[0]
-                                    for value in probabilities {
-                                        guard let index = probabilities.firstIndex(of: value) else { continue }
-                                        technicalScore += Double(truncating: value) * Double(index + 1)
-                                    }
-                                    
-                                    let meanScore = (aestheticScore + technicalScore) / 2
-                                    
-                                    // Update selected photo score
-                                    if photo.assetIdentifier != nil {
-                                        if let index = self.selectedPhotos.firstIndex(where: { $0.assetIdentifier == photo.assetIdentifier }) {
-                                            var updatedPhoto = self.selectedPhotos[index]
-                                            updatedPhoto.updateScore(meanScore)
-                                            self.selectedPhotos[index] = updatedPhoto
-                                        }
-                                    } else if photo.localImageName != nil {
-                                        if let index = self.selectedPhotos.firstIndex(where: { $0.localImageName == photo.localImageName }) {
-                                            var updatedPhoto = self.selectedPhotos[index]
-                                            updatedPhoto.updateScore(meanScore)
-                                            self.selectedPhotos[index] = updatedPhoto
-                                        }
-                                    }
-                                    
-                                    // Create scored photo
-                                    let scoredPhoto = ScoredPhoto(
-                                        assetIdentifier: photo.assetIdentifier,
-                                        localImageName: photo.localImageName,
-                                        modificationDate: photo.modificationDate,
-                                        score: meanScore,
-                                        label: photo.label,
-                                        location: photo.location,
-                                        locationName: photo.locationName
-                                    )
-                                    newScoredPhotos.append(scoredPhoto)
-                                } else {
-                                    print("Technical model error: \(error?.localizedDescription ?? "unknown error")")
-                                }
-                                group.leave()
-                            }
-                        } else {
-                            group.leave()
                         }
+                        continuation.resume(returning: (aesthetic, technical))
+                    }
+                } else {
+                    continuation.resume(returning: (0.0, 0.0))
+                }
+            }
+        }
+    }
+    
+    @MainActor
+    private func updateUIWithResults(_ newScoredPhotos: [ScoredPhoto], loadingAlert: UIAlertController, startTime: Date, completion: (() -> Void)?) {
+        // Update selected photos with scores
+        for scoredPhoto in newScoredPhotos {
+            if let index = selectedPhotos.firstIndex(where: { photo in
+                photo.assetIdentifier == scoredPhoto.assetIdentifier ||
+                photo.localImageName == scoredPhoto.localImageName
+            }) {
+                var updatedPhoto = selectedPhotos[index]
+                updatedPhoto.updateScore(scoredPhoto.score)
+                selectedPhotos[index] = updatedPhoto
+            }
+        }
+        
+        // Update scored photos
+        scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
+        lastProcessingTime = Date().timeIntervalSince(startTime)
+        loadingAlert.dismiss(animated: true)
+        completion?()
+    }
+    
+    @MainActor
+    @objc internal func scoreAllSelectedPhotos(completion: (() -> Void)? = nil) {
+        Task {
+            // Show loading indicator
+            let loadingAlert = UIAlertController(
+                title: "Processing Photos",
+                message: "Analyzing...",
+                preferredStyle: .alert
+            )
+            present(loadingAlert, animated: true)
+            
+            // Process all selected photos
+            let startTime = Date()
+            var newScoredPhotos: [ScoredPhoto] = []
+            
+            // Create a local copy of selectedPhotos to avoid data races
+            let photosToProcess = selectedPhotos
+            
+            // Process photos concurrently using TaskGroup
+            await withTaskGroup(of: ScoredPhoto?.self) { group in
+                for photo in photosToProcess {
+                    group.addTask { [weak self] in
+                        guard let self = self else { return nil }
+                        await MainActor.run {
+                            loadingAlert.message = "Analyzing photo..."
+                        }
+                        return await self.processPhoto(photo, photosToProcess: photosToProcess)
+                    }
+                }
+                
+                // Collect results
+                for await scoredPhoto in group {
+                    if let scoredPhoto {
+                        newScoredPhotos.append(scoredPhoto)
                     }
                 }
             }
             
-            /*
-             // Process local images from bundle if not already scored
-             for imageName in self.imageNamesArray {
-             group.enter()
-             
-             // Check if image was already scored
-             if let existingScore = self.scoredPhotos.first(where: { $0.localImageName == imageName }) {
-             newScoredPhotos.append(existingScore)
-             group.leave()
-             continue
-             }
-             
-             // Prepare and score local image
-             guard let image = UIImage(named: imageName),
-             let cgImage = image.cgImage,
-             let inputs = self.prepareImage(fromBestScore: true, withCGImage: cgImage) else {
-             group.leave()
-             continue
-             }
-             
-             self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-             var aestheticScore = 0.0
-             var technicalScore = 0.0
-             
-             if error == nil, let outputs = outputs,
-             let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-             let probabilities = output[0]
-             for value in probabilities {
-             guard let index = probabilities.firstIndex(of: value) else { continue }
-             aestheticScore += Double(truncating: value) * Double(index + 1)
-             }
-             
-             self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
-             if error == nil, let outputs = outputs,
-             let output = try? outputs.output(index: 0) as? [[NSNumber]] {
-             let probabilities = output[0]
-             for value in probabilities {
-             guard let index = probabilities.firstIndex(of: value) else { continue }
-             technicalScore += Double(truncating: value) * Double(index + 1)
-             }
-             
-             let meanScore = (aestheticScore + technicalScore) / 2
-             
-             // Create scored photo
-             let scoredPhoto = ScoredPhoto(
-             assetIdentifier: nil,
-             localImageName: imageName,
-             modificationDate: Date(),
-             score: meanScore
-             )
-             newScoredPhotos.append(scoredPhoto)
-             }
-             group.leave()
-             }
-             } else {
-             group.leave()
-             }
-             }
-             }
-             */
-            
-            group.notify(queue: .main) {
-                // Update scored photos
-                self.scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
-                self.lastProcessingTime = Date().timeIntervalSince(startTime)
-                loadingAlert.dismiss(animated: true)
-                if let completion {
-                    completion()
-                }
-            }
+            // Update UI with results
+            updateUIWithResults(newScoredPhotos, loadingAlert: loadingAlert, startTime: startTime, completion: completion)
         }
     }
     
@@ -1021,9 +977,11 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         // Add option to clear all filters
         alert.addAction(UIAlertAction(title: "Reset to Default (All Labels)", style: .destructive) { [weak self] _ in
-            PhotoManager.shared.resetToDefaultLabels()
-            // Refresh photos with new filter settings
-            self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+            Task {
+                await PhotoManager.shared.resetToDefaultLabels()
+                // Refresh photos with new filter settings
+                self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+            }
         })
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -1043,94 +1001,113 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     private func showLabelSelectionAlert(for filterType: LabelFilterType) {
-        let alert = UIAlertController(
-            title: filterType == .required ? "Required Labels" : "Excluded Labels",
-            message: "Select multiple labels to \(filterType == .required ? "require" : "exclude")\nTap Done when finished",
-            preferredStyle: .alert
-        )
-        
-        // Add a scrollable view for labels
-        let scrollView = UIScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.spacing = 10
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Get labels based on filter type
-        let labelsSet = filterType == .required ? PhotoManager.shared.defaultLabels : PhotoManager.shared.defaultExcludedLabels
-        // Convert to array and sort alphabetically (A to Z)
-        let commonLabels = Array(labelsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        
-        // Create checkboxes for each label
-        for (index, label) in commonLabels.enumerated() {
-            let isSelected = filterType == .required ?
-            PhotoManager.shared.requiredLabels.contains(label) :
-            PhotoManager.shared.excludedLabels.contains(label)
+        Task {
+            let alert = UIAlertController(
+                title: filterType == .required ? "Required Labels" : "Excluded Labels",
+                message: "Select multiple labels to \(filterType == .required ? "require" : "exclude")\nTap Done when finished",
+                preferredStyle: .alert
+            )
             
-            let button = UIButton(type: .system)
-            button.setTitle("\(isSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
-            button.contentHorizontalAlignment = .left
-            button.tag = index
+            // Add a scrollable view for labels
+            let scrollView = UIScrollView()
+            scrollView.translatesAutoresizingMaskIntoConstraints = false
             
-            button.addAction(UIAction { _ in
-                var isNowSelected = false
+            let stackView = UIStackView()
+            stackView.axis = .vertical
+            stackView.spacing = 10
+            stackView.translatesAutoresizingMaskIntoConstraints = false
+            
+            // Get labels based on filter type and current state
+            let labelsSet = filterType == .required ? PhotoManager.shared.defaultLabels : PhotoManager.shared.defaultExcludedLabels
+            let currentLabels = filterType == .required ? 
+                await PhotoManager.shared.requiredLabels :
+                await PhotoManager.shared.excludedLabels
+            
+            // Convert to array and sort alphabetically (A to Z)
+            let commonLabels = Array(labelsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            
+            // Create checkboxes for each label
+            for (index, label) in commonLabels.enumerated() {
+                let isSelected = currentLabels.contains(label)
                 
-                switch filterType {
-                case .required:
-                    if PhotoManager.shared.requiredLabels.contains(label) {
-                        //self.requiredLabels.remove(label)
-                        PhotoManager.shared.requiredLabels = PhotoManager.shared.requiredLabels.filter { $0 != label }
-                    } else {
-                        PhotoManager.shared.requiredLabels.insert(label)
-                        isNowSelected = true
-                    }
-                case .excluded:
-                    if PhotoManager.shared.excludedLabels.contains(label) {
-                        //self.excludedLabels.remove(label)
-                        PhotoManager.shared.excludedLabels = PhotoManager.shared.excludedLabels.filter { $0 != label }
-                    } else {
-                        PhotoManager.shared.excludedLabels.insert(label)
-                        isNowSelected = true
-                    }
-                }
+                let button = UIButton(type: .system)
+                button.setTitle("\(isSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
+                button.contentHorizontalAlignment = .left
+                button.tag = index
                 
-                // Update button title to show selection state
-                button.setTitle("\(isNowSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
-            }, for: .touchUpInside)
+                button.addAction(UIAction { [weak self] _ in
+                    Task {
+                        var isNowSelected = false
+                        
+                        switch filterType {
+                        case .required:
+                            let currentRequired = await PhotoManager.shared.requiredLabels
+                            if currentRequired.contains(label) {
+                                let filtered = currentRequired.filter { $0 != label }
+                                await PhotoManager.shared.updateRequiredLabels(filtered)
+                            } else {
+                                var updated = currentRequired
+                                updated.insert(label)
+                                await PhotoManager.shared.updateRequiredLabels(updated)
+                                isNowSelected = true
+                            }
+                        case .excluded:
+                            let currentExcluded = await PhotoManager.shared.excludedLabels
+                            if currentExcluded.contains(label) {
+                                let filtered = currentExcluded.filter { $0 != label }
+                                await PhotoManager.shared.updateExcludedLabels(filtered)
+                            } else {
+                                var updated = currentExcluded
+                                updated.insert(label)
+                                await PhotoManager.shared.updateExcludedLabels(updated)
+                                isNowSelected = true
+                            }
+                        }
+                        
+                        // Update button title to show selection state
+                        await MainActor.run {
+                            button.setTitle("\(isNowSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
+                        }
+                        
+                        // Refresh photos with new filter settings
+                        self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+                    }
+                }, for: .touchUpInside)
             
-            stackView.addArrangedSubview(button)
+                stackView.addArrangedSubview(button)
+            }
+            
+            scrollView.addSubview(stackView)
+            alert.view.addSubview(scrollView)
+            
+            // Add constraints
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: alert.view.topAnchor, constant: 50),
+                scrollView.leadingAnchor.constraint(equalTo: alert.view.leadingAnchor, constant: 20),
+                scrollView.trailingAnchor.constraint(equalTo: alert.view.trailingAnchor, constant: -20),
+                scrollView.bottomAnchor.constraint(equalTo: alert.view.bottomAnchor, constant: -80),
+                
+                stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+            ])
+            
+            // Set alert size
+            alert.view.heightAnchor.constraint(equalToConstant: 400).isActive = true
+            
+            // Add Done button that refreshes the photos
+            alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
+                self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            
+            await MainActor.run {
+                present(alert, animated: true)
+            }
         }
-        
-        scrollView.addSubview(stackView)
-        alert.view.addSubview(scrollView)
-        
-        // Add constraints
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: alert.view.topAnchor, constant: 50),
-            scrollView.leadingAnchor.constraint(equalTo: alert.view.leadingAnchor, constant: 20),
-            scrollView.trailingAnchor.constraint(equalTo: alert.view.trailingAnchor, constant: -20),
-            scrollView.bottomAnchor.constraint(equalTo: alert.view.bottomAnchor, constant: -80),
-            
-            stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
-        ])
-        
-        // Set alert size
-        alert.view.heightAnchor.constraint(equalToConstant: 400).isActive = true
-        
-        // Add Done button that refreshes the photos
-        alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
-            self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
-        })
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        present(alert, animated: true)
     }
     
     /*
