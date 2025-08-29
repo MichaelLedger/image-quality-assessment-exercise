@@ -317,7 +317,8 @@ actor PhotoManager {
     }
     
     // MARK: - Photo Fetching
-    
+    //@available(*, deprecated, message: "")
+    //@available(iOS 15, *)
     func fetchMomentsAlbums(fetchLimit: Int = 1000) async throws -> [ScoredPhoto] {
         // Request photo library authorization
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)

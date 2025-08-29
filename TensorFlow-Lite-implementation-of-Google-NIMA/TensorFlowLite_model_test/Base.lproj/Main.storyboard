@@ -128,7 +128,7 @@
                         </variation>
                     </view>
                     <navigationItem key="navigationItem" title="Image Scorer" id="LNj-vz-Mju">
-                        <barButtonItem key="rightBarButtonItem" title="Show Best" hidden="YES" id="EDv-Sr-wGi">
+                        <barButtonItem key="rightBarButtonItem" title="Show Best" id="EDv-Sr-wGi">
                             <connections>
                                 <segue destination="zhP-AV-Nim" kind="show" identifier="showBestSegue" id="jvM-UT-Wbz"/>
                             </connections>

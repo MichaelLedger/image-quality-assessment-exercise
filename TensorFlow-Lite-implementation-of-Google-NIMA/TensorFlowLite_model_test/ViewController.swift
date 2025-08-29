@@ -193,6 +193,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             navigationItem.leftBarButtonItems = [showGridButton, bestPhotoButton]
         }
         
+        //test
+        navigationItem.rightBarButtonItem = nil
+        
         picker.delegate = self
         picker.dataSource = self
         

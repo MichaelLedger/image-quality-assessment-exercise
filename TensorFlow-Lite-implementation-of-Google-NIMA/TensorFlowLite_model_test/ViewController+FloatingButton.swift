@@ -1,6 +1,8 @@
 import UIKit
 import Photos
 import Vision
+import Firebase
+import FirebaseMLCommon
 
 extension ViewController {
     func setupFloatingButton() {
@@ -237,40 +239,70 @@ extension ViewController {
                     }
                 }
                 
-                // Create completion handler for aesthetic model
-                let handleAestheticScore: (Double) -> Void = { [weak self] aestheticScore in
-                    guard let self = self else { return }
-                    
-                    // Run technical model
-                    self.technicalInterpreter.run(inputs: preparedInputs, options: self.ioOptions) { outputs, error in
-                        guard error == nil,
-                              let outputs = outputs,
-                              let output = try? outputs.output(index: 0) as? [[NSNumber]],
-                              let probabilities = output.first else { return }
-                        
-                        var technicalScore = 0.0
-                        for (index, value) in probabilities.enumerated() {
-                            technicalScore += Double(truncating: value) * Double(index + 1)
+                
+                
+                // Run both models concurrently and safely
+                Task {
+                    do {
+                        let aesthetic = try await calculateAestheticScore(inputs: preparedInputs)
+                        let technical = try await calculateTechnicalScore(inputs: preparedInputs)
+                        // Update UI on main thread
+                        await MainActor.run {
+                            handleTechnicalScore(aesthetic, technical)
                         }
-                        
-                        handleTechnicalScore(aestheticScore, technicalScore)
+                    } catch {
+                        print("Error calculating scores: \(error)")
                     }
+                }
+            }
+        }
+    }
+    
+    // Helper methods for safe score calculation
+    private func calculateAestheticScore(inputs: ModelInputs) async throws -> Double {
+        return try await withCheckedThrowingContinuation { continuation in
+            self.aestheticInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
                 }
                 
-                // Run aesthetic model
-                aestheticInterpreter.run(inputs: preparedInputs, options: ioOptions) { outputs, error in
-                    guard error == nil,
-                          let outputs = outputs,
-                          let output = try? outputs.output(index: 0) as? [[NSNumber]],
-                          let probabilities = output.first else { return }
-                    
-                    var aestheticScore = 0.0
-                    for (index, value) in probabilities.enumerated() {
-                        aestheticScore += Double(truncating: value) * Double(index + 1)
-                    }
-                    
-                    handleAestheticScore(aestheticScore)
+                guard let outputs = outputs,
+                      let output = try? outputs.output(index: 0) as? [[NSNumber]],
+                      let probabilities = output.first else {
+                    continuation.resume(throwing: NSError(domain: "ScoreCalculation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid output format"]))
+                    return
                 }
+                
+                var score = 0.0
+                for (index, value) in probabilities.enumerated() {
+                    score += Double(truncating: value) * Double(index + 1)
+                }
+                continuation.resume(returning: score)
+            }
+        }
+    }
+    
+    private func calculateTechnicalScore(inputs: ModelInputs) async throws -> Double {
+        return try await withCheckedThrowingContinuation { continuation in
+            self.technicalInterpreter.run(inputs: inputs, options: self.ioOptions) { outputs, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let outputs = outputs,
+                      let output = try? outputs.output(index: 0) as? [[NSNumber]],
+                      let probabilities = output.first else {
+                    continuation.resume(throwing: NSError(domain: "ScoreCalculation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid output format"]))
+                    return
+                }
+                
+                var score = 0.0
+                for (index, value) in probabilities.enumerated() {
+                    score += Double(truncating: value) * Double(index + 1)
+                }
+                continuation.resume(returning: score)
             }
         }
     }
