@@ -12,6 +12,10 @@ public enum PreferenceKeys {
     static let resetOnce = "resetOnce"
 }
 
+public extension NSNotification.Name {
+    static let photoProcessingProgress = NSNotification.Name("BestPhoto.PhotoProcessingProgress")
+}
+
 actor PhotoManager {
     
     static let shared = PhotoManager()
@@ -208,6 +212,7 @@ actor PhotoManager {
         let batchSize = 20 // Reduced batch size
         var allPhotos: [SelectedPhoto?] = Array(repeating: nil, count: assetsArray.count)
         var successfullyProcessed = 0
+        var processedCount = 0
         
         // Process each batch sequentially
         for batch in stride(from: 0, to: assetsArray.count, by: batchSize) {
@@ -222,6 +227,10 @@ actor PhotoManager {
                 let globalIndex = batch + index
                 print("Batch \(batchNumber): Processing photo \(index + 1)/\(batchAssets.count)")
                 
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .photoProcessingProgress, object: nil, userInfo: ["current": processedCount + 1, "total": assetsArray.count])
+                }
+                
                 if let photo = await processPhoto(
                     asset: asset,
                     totalCount: assets.count,
@@ -231,6 +240,7 @@ actor PhotoManager {
                     successfullyProcessed += 1
                     print("Batch \(batchNumber): Successfully processed photo \(index + 1)/\(batchAssets.count)")
                 }
+                processedCount += 1
             }
             
             print("Batch \(batchNumber) completed. Processed \(end) of \(assetsArray.count) photos. Successfully processed: \(successfullyProcessed)")

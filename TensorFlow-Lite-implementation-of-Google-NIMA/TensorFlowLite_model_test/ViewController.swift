@@ -35,6 +35,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     var inputs = ModelInputs()
     var ioOptions = ModelInputOutputOptions()
     
+    var loadingAlert: UIAlertController?
+    
     // Creating an interpreter from the models
     let aestheticOptions = ModelOptions(
         remoteModelName: "aesthetic_model",
@@ -147,6 +149,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        addObservers()
         
         // Setup score range label
         //        scoreRangeLabel = UILabel()
@@ -372,6 +376,22 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
+    // MARK: - Add Observers
+    private func addObservers() {
+        NotificationCenter.default.addObserver(self, selector: #selector(updateAlertMsg), name: .photoProcessingProgress, object: nil)
+    }
+    
+    @objc func updateAlertMsg(_ noti: Notification) {
+        // Update alert message here
+        guard let loadingAlert = loadingAlert,
+              let userInfo = noti.userInfo,
+              let current = userInfo["current"] as? Int,
+              let total = userInfo["total"] as? Int else { return }
+        DispatchQueue.main.async {
+            loadingAlert.message = "Fetching recent photos(filter duplicated/similar/labels)...\nProcessing photo \(current)/\(total)"
+        }
+    }
+    
     // MARK: - Photo Library Methods
     
     private func checkPhotoLibraryAuthorizationAndFetchPhotos() {
@@ -385,6 +405,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             await MainActor.run {
                 present(loadingAlert, animated: true)
             }
+            self.loadingAlert = loadingAlert
             
             let startTime = Date()
             
