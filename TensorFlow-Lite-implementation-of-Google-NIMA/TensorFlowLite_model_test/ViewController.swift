@@ -192,8 +192,6 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             let bestPhotoButton = UIBarButtonItem(title: "Best", style: .plain, target: self, action: #selector(findBestPhotoTapped))
             navigationItem.leftBarButtonItems = [showGridButton, bestPhotoButton]
         }
-        
-        //test
         navigationItem.rightBarButtonItem = nil
         
         picker.delegate = self
@@ -202,7 +200,6 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         // Setup floating button
         setupFloatingButton()
         
-        //test
         //ignore local images for now
         // Add local images to selectedPhotos
         /*
@@ -393,7 +390,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             // Set default values if not already set
             if UserDefaults.standard.object(forKey: PreferenceKeys.maxPhotoCount) == nil {
-                await PhotoManager.shared.updateMaxPhotoCount(500) // Default value //test
+                await PhotoManager.shared.updateMaxPhotoCount(500) // Default value
             }
             // Fetch photos using shared manager
             let photos = await PhotoManager.shared.fetchRecentPhotos(maxPhotoCount: PhotoManager.shared.maxPhotoCount)
