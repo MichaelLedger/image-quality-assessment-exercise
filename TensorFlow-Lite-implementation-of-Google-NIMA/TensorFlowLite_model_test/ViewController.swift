@@ -390,7 +390,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             // Set default values if not already set
             if UserDefaults.standard.object(forKey: PreferenceKeys.maxPhotoCount) == nil {
-                await PhotoManager.shared.updateMaxPhotoCount(50) // Default value //test
+                await PhotoManager.shared.updateMaxPhotoCount(500) // Default value //test
             }
             // Fetch photos using shared manager
             let photos = await PhotoManager.shared.fetchRecentPhotos(maxPhotoCount: PhotoManager.shared.maxPhotoCount)
@@ -662,19 +662,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     
     @MainActor
     private func updateUIWithResults(_ newScoredPhotos: [ScoredPhoto], loadingAlert: UIAlertController, startTime: Date, completion: (() -> Void)?) {
-        // Update selected photos with scores
-        for scoredPhoto in newScoredPhotos {
-            if let index = selectedPhotos.firstIndex(where: { photo in
-                photo.assetIdentifier == scoredPhoto.assetIdentifier ||
-                photo.localImageName == scoredPhoto.localImageName
-            }) {
-                var updatedPhoto = selectedPhotos[index]
-                updatedPhoto.updateScore(scoredPhoto.score)
-                selectedPhotos[index] = updatedPhoto
-            }
-        }
-        
-        // Update scored photos
+        // Update scored photos - sort by modification date (newest first) like system Photos app
         scoredPhotos = newScoredPhotos.sorted { $0.score > $1.score }
         lastProcessingTime = Date().timeIntervalSince(startTime)
         loadingAlert.dismiss(animated: true)
@@ -699,24 +687,49 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             // Create a local copy of selectedPhotos to avoid data races
             let photosToProcess = selectedPhotos
             
-            // Process photos concurrently using TaskGroup
-            await withTaskGroup(of: ScoredPhoto?.self) { group in
-                for photo in photosToProcess {
-                    group.addTask { [weak self] in
-                        guard let self = self else { return nil }
-                        await MainActor.run {
-                            loadingAlert.message = "Analyzing photo..."
+            // Process in smaller batches
+            let batchSize = 20 // Reduced batch size for better progress tracking
+            
+            // Process each batch sequentially
+            for batch in stride(from: 0, to: photosToProcess.count, by: batchSize) {
+                let end = min(batch + batchSize, photosToProcess.count)
+                let batchPhotos = Array(photosToProcess[batch..<end])
+                let batchNumber = batch/batchSize + 1
+                let totalBatches = (photosToProcess.count + batchSize - 1) / batchSize
+                
+                await MainActor.run {
+                    //loadingAlert.message = "Processing batch \(batchNumber)/\(totalBatches)..."
+                    loadingAlert.message = "Processing photo \(batch)/\(photosToProcess.count)..."
+                }
+                
+                print("Starting batch \(batchNumber) of \(totalBatches)...")
+                
+                // Process photos in this batch concurrently
+                await withTaskGroup(of: ScoredPhoto?.self) { group in
+                    for (index, photo) in batchPhotos.enumerated() {
+                        group.addTask { [weak self] in
+                            guard let self = self else { return nil }
+                            print("Batch \(batchNumber): Processing photo \(index + 1)/\(batchPhotos.count)")
+                            let scoredPhoto = await self.processPhoto(photo, photosToProcess: photosToProcess)
+                            // Calculate the actual index in selectedPhotos array
+                            let actualIndex = batch + index
+                            await MainActor.run {
+                                self.selectedPhotos[actualIndex].updateScore(scoredPhoto?.score)
+                            }
+                            return scoredPhoto
                         }
-                        return await self.processPhoto(photo, photosToProcess: photosToProcess)
+                    }
+                    
+                    // Collect results from this batch
+                    for await scoredPhoto in group {
+                        if let scoredPhoto {
+                            newScoredPhotos.append(scoredPhoto)
+                            print("Successfully processed photo. Total processed: \(newScoredPhotos.count)/\(photosToProcess.count)")
+                        }
                     }
                 }
                 
-                // Collect results
-                for await scoredPhoto in group {
-                    if let scoredPhoto {
-                        newScoredPhotos.append(scoredPhoto)
-                    }
-                }
+                print("Batch \(batchNumber) completed. Processed \(end) of \(photosToProcess.count) photos. Successfully processed: \(newScoredPhotos.count)")
             }
             
             // Update UI with results
@@ -965,14 +978,30 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             preferredStyle: .actionSheet
         )
         
-        // Add option to require specific labels
-        alert.addAction(UIAlertAction(title: "Require Labels", style: .default) { [weak self] _ in
+        // Add option to manage required labels
+        alert.addAction(UIAlertAction(title: "Select Required Labels", style: .default) { [weak self] _ in
             self?.showLabelSelectionAlert(for: .required)
         })
         
-        // Add option to exclude specific labels
-        alert.addAction(UIAlertAction(title: "Exclude Labels", style: .default) { [weak self] _ in
+        // Add option to manage excluded labels
+        alert.addAction(UIAlertAction(title: "Select Excluded Labels", style: .default) { [weak self] _ in
             self?.showLabelSelectionAlert(for: .excluded)
+        })
+        
+        // Add options for required labels
+        alert.addAction(UIAlertAction(title: "Add Custom Required Labels", style: .default) { [weak self] _ in
+            self?.showCustomLabelAlert(for: .required)
+        })
+        alert.addAction(UIAlertAction(title: "Remove Custom Required Labels", style: .default) { [weak self] _ in
+            self?.showRemoveCustomLabelsAlert(for: .required)
+        })
+        
+        // Add options for excluded labels
+        alert.addAction(UIAlertAction(title: "Add Custom Excluded Labels", style: .default) { [weak self] _ in
+            self?.showCustomLabelAlert(for: .excluded)
+        })
+        alert.addAction(UIAlertAction(title: "Remove Custom Excluded Labels", style: .default) { [weak self] _ in
+            self?.showRemoveCustomLabelsAlert(for: .excluded)
         })
         
         // Add option to clear all filters
@@ -1000,11 +1029,59 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         case excluded
     }
     
+    private func createLabelButton(label: String, index: Int, isSelected: Bool, filterType: LabelFilterType) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle("\(isSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
+        button.contentHorizontalAlignment = .left
+        button.tag = index
+        
+        button.addAction(UIAction { [weak self] _ in
+            Task {
+                var isNowSelected = false
+                
+                switch filterType {
+                case .required:
+                    let currentRequired = await PhotoManager.shared.requiredLabels
+                    if currentRequired.contains(label) {
+                        let filtered = currentRequired.filter { $0 != label }
+                        await PhotoManager.shared.updateRequiredLabels(filtered)
+                    } else {
+                        var updated = currentRequired
+                        updated.insert(label)
+                        await PhotoManager.shared.updateRequiredLabels(updated)
+                        isNowSelected = true
+                    }
+                case .excluded:
+                    let currentExcluded = await PhotoManager.shared.excludedLabels
+                    if currentExcluded.contains(label) {
+                        let filtered = currentExcluded.filter { $0 != label }
+                        await PhotoManager.shared.updateExcludedLabels(filtered)
+                    } else {
+                        var updated = currentExcluded
+                        updated.insert(label)
+                        await PhotoManager.shared.updateExcludedLabels(updated)
+                        isNowSelected = true
+                    }
+                }
+                
+                // Update button title to show selection state
+                await MainActor.run {
+                    button.setTitle("\(isNowSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
+                }
+                
+                // Refresh photos with new filter settings
+                self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+            }
+        }, for: .touchUpInside)
+        
+        return button
+    }
+
     private func showLabelSelectionAlert(for filterType: LabelFilterType) {
         Task {
             let alert = UIAlertController(
-                title: filterType == .required ? "Required Labels" : "Excluded Labels",
-                message: "Select multiple labels to \(filterType == .required ? "require" : "exclude")\nTap Done when finished",
+                title: filterType == .required ? "Select Required Labels" : "Select Excluded Labels",
+                message: "Select labels to \(filterType == .required ? "require" : "exclude")",
                 preferredStyle: .alert
             )
             
@@ -1023,57 +1100,13 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
                 await PhotoManager.shared.requiredLabels :
                 await PhotoManager.shared.excludedLabels
             
-            // Convert to array and sort alphabetically (A to Z)
+            // Convert default labels to array and sort alphabetically (A to Z)
             let commonLabels = Array(labelsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             
-            // Create checkboxes for each label
+            // Create checkboxes for each default label
             for (index, label) in commonLabels.enumerated() {
                 let isSelected = currentLabels.contains(label)
-                
-                let button = UIButton(type: .system)
-                button.setTitle("\(isSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
-                button.contentHorizontalAlignment = .left
-                button.tag = index
-                
-                button.addAction(UIAction { [weak self] _ in
-                    Task {
-                        var isNowSelected = false
-                        
-                        switch filterType {
-                        case .required:
-                            let currentRequired = await PhotoManager.shared.requiredLabels
-                            if currentRequired.contains(label) {
-                                let filtered = currentRequired.filter { $0 != label }
-                                await PhotoManager.shared.updateRequiredLabels(filtered)
-                            } else {
-                                var updated = currentRequired
-                                updated.insert(label)
-                                await PhotoManager.shared.updateRequiredLabels(updated)
-                                isNowSelected = true
-                            }
-                        case .excluded:
-                            let currentExcluded = await PhotoManager.shared.excludedLabels
-                            if currentExcluded.contains(label) {
-                                let filtered = currentExcluded.filter { $0 != label }
-                                await PhotoManager.shared.updateExcludedLabels(filtered)
-                            } else {
-                                var updated = currentExcluded
-                                updated.insert(label)
-                                await PhotoManager.shared.updateExcludedLabels(updated)
-                                isNowSelected = true
-                            }
-                        }
-                        
-                        // Update button title to show selection state
-                        await MainActor.run {
-                            button.setTitle("\(isNowSelected ? "✓ " : "☐ ")\(label.description)", for: .normal)
-                        }
-                        
-                        // Refresh photos with new filter settings
-                        self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
-                    }
-                }, for: .touchUpInside)
-            
+                let button = createLabelButton(label: label, index: index, isSelected: isSelected, filterType: filterType)
                 stackView.addArrangedSubview(button)
             }
             
@@ -1100,6 +1133,183 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             // Add Done button that refreshes the photos
             alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
                 self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            
+            await MainActor.run {
+                present(alert, animated: true)
+            }
+        }
+    }
+    
+    private func showCustomLabelAlert(for filterType: LabelFilterType) {
+        Task {
+            let alert = UIAlertController(
+                title: filterType == .required ? "Add Custom Required Label" : "Add Custom Excluded Label",
+                message: "Enter a custom label to \(filterType == .required ? "require" : "exclude")",
+                preferredStyle: .alert
+            )
+            
+            // Add text field for custom label input
+            alert.addTextField { textField in
+                textField.placeholder = "Enter custom label"
+                textField.autocapitalizationType = .none
+                textField.returnKeyType = .done
+                textField.clearButtonMode = .whileEditing
+            }
+            
+            // Add button to add custom label
+            alert.addAction(UIAlertAction(title: "Add Label", style: .default) { [weak self] _ in
+                guard let textField = alert.textFields?.first,
+                      let customLabel = textField.text?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                      !customLabel.isEmpty else {
+                    return
+                }
+                
+                Task {
+                    switch filterType {
+                    case .required:
+                        var currentRequired = await PhotoManager.shared.requiredLabels
+                        currentRequired.insert(customLabel)
+                        await PhotoManager.shared.updateRequiredLabels(currentRequired)
+                    case .excluded:
+                        var currentExcluded = await PhotoManager.shared.excludedLabels
+                        currentExcluded.insert(customLabel)
+                        await PhotoManager.shared.updateExcludedLabels(currentExcluded)
+                    }
+                    
+                    // Refresh photos with new filter settings
+                    self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+                }
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            
+            await MainActor.run {
+                present(alert, animated: true)
+            }
+        }
+    }
+    
+    private func showRemoveCustomLabelsAlert(for filterType: LabelFilterType) {
+        Task {
+            let alert = UIAlertController(
+                title: filterType == .required ? "Remove Custom Required Labels" : "Remove Custom Excluded Labels",
+                message: "Select labels to remove and tap Done",
+                preferredStyle: .alert
+            )
+            
+            // Add a scrollable view for labels
+            let scrollView = UIScrollView()
+            scrollView.translatesAutoresizingMaskIntoConstraints = false
+            
+            let stackView = UIStackView()
+            stackView.axis = .vertical
+            stackView.spacing = 10
+            stackView.translatesAutoresizingMaskIntoConstraints = false
+            
+            // Get custom labels for the selected filter type
+            let defaultLabels = filterType == .required ? PhotoManager.shared.defaultLabels : PhotoManager.shared.defaultExcludedLabels
+            let currentLabels = filterType == .required ? 
+                await PhotoManager.shared.requiredLabels :
+                await PhotoManager.shared.excludedLabels
+            
+            let customLabels = currentLabels.subtracting(defaultLabels).sorted()
+            
+            // Track selected labels
+            var selectedLabels = Set<String>()
+            
+            if !customLabels.isEmpty {
+                for label in customLabels {
+                    let container = UIView()
+                    container.translatesAutoresizingMaskIntoConstraints = false
+                    
+                    let textLabel = UILabel()
+                    textLabel.text = label
+                    textLabel.translatesAutoresizingMaskIntoConstraints = false
+                    
+                    let selectButton = UIButton(type: .system)
+                    selectButton.setTitle("☐ Select", for: .normal)
+                    selectButton.translatesAutoresizingMaskIntoConstraints = false
+                    
+                    selectButton.addAction(UIAction { [weak selectButton] _ in
+                        if selectedLabels.contains(label) {
+                            selectedLabels.remove(label)
+                            selectButton?.setTitle("☐ Select", for: .normal)
+                        } else {
+                            selectedLabels.insert(label)
+                            selectButton?.setTitle("✓ Selected", for: .normal)
+                        }
+                    }, for: .touchUpInside)
+                    
+                    container.addSubview(textLabel)
+                    container.addSubview(selectButton)
+                    
+                    NSLayoutConstraint.activate([
+                        textLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                        textLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                        
+                        selectButton.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                        selectButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                        selectButton.leadingAnchor.constraint(greaterThanOrEqualTo: textLabel.trailingAnchor, constant: 10),
+                        
+                        container.heightAnchor.constraint(equalToConstant: 30)
+                    ])
+                    
+                    stackView.addArrangedSubview(container)
+                }
+            } else {
+                let noLabelsLabel = UILabel()
+                noLabelsLabel.text = "No custom labels added yet"
+                noLabelsLabel.textColor = .gray
+                noLabelsLabel.textAlignment = .center
+                stackView.addArrangedSubview(noLabelsLabel)
+            }
+            
+            scrollView.addSubview(stackView)
+            alert.view.addSubview(scrollView)
+            
+            // Add constraints
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: alert.view.topAnchor, constant: 80),
+                scrollView.leadingAnchor.constraint(equalTo: alert.view.leadingAnchor, constant: 20),
+                scrollView.trailingAnchor.constraint(equalTo: alert.view.trailingAnchor, constant: -20),
+                scrollView.bottomAnchor.constraint(equalTo: alert.view.bottomAnchor, constant: -80),
+                
+                stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+            ])
+            
+            // Set alert size
+            alert.view.heightAnchor.constraint(equalToConstant: 400).isActive = true
+            
+            // Add Done button that processes selected labels
+            alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
+                guard !selectedLabels.isEmpty else { return }
+                
+                Task {
+                    switch filterType {
+                    case .required:
+                        var currentRequired = await PhotoManager.shared.requiredLabels
+                        for label in selectedLabels {
+                            currentRequired.remove(label)
+                        }
+                        await PhotoManager.shared.updateRequiredLabels(currentRequired)
+                    case .excluded:
+                        var currentExcluded = await PhotoManager.shared.excludedLabels
+                        for label in selectedLabels {
+                            currentExcluded.remove(label)
+                        }
+                        await PhotoManager.shared.updateExcludedLabels(currentExcluded)
+                    }
+                    
+                    // Refresh photos with new filter settings
+                    self?.checkPhotoLibraryAuthorizationAndFetchPhotos()
+                }
             })
             
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -1372,48 +1582,38 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
         return selectedPhotos.count
     }
     
-    func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? {
+    func pickerView(_ pickerView: UIPickerView, attributedTitleForRow row: Int, forComponent component: Int) -> NSAttributedString? {
         let photo = selectedPhotos[row]
         
         // Get the cached label if available
-        let label = photo.label //photo.assetIdentifier.flatMap { labelCache[$0] }?.description
+        let label = photo.label
         
-        // Format the base display text
-        var displayText = ""
+        // Create mutable attributed string for styling
+        let attributedText = NSMutableAttributedString()
         
-        /*
-        // Add date for photos from library
-        if photo.localImageName == nil {
-            let date = photo.creationDate ?? Date()
-            let formatter = DateFormatter()
-            formatter.dateStyle = .short
-            formatter.timeStyle = .short
-            displayText += formatter.string(from: date)
-        } else {
-            // For local images, use the name
-            displayText += photo.localImageName ?? ""
-        }
-         */
-        // Add label if available
-        if let label = label {
-            displayText += "\(label)"
-        } else {
-            displayText += "unknown"
-        }
-        
-        // Add score if available
+        // Add score if available with blue color and smaller font
         if let score = photo.score {
-            displayText += " - [\(String(format: "%.2f", score))]"
+            let scoreText = NSAttributedString(
+                string: "[\(String(format: "%.2f", score))] ",
+                attributes: [
+                    .foregroundColor: UIColor.systemBlue,
+                    .font: UIFont.systemFont(ofSize: 12, weight: .medium)
+                ]
+            )
+            attributedText.append(scoreText)
         }
         
-        // Add utility indicator if available
-        /*
-        if let isUtility = photo.isUtility {
-            displayText += isUtility ? " 📄" : " 📸"
-        }
-         */
+        // Add label with default color and normal size font
+        let labelText = NSAttributedString(
+            string: label ?? "unknown",
+            attributes: [
+                .foregroundColor: UIColor.darkText,
+                .font: UIFont.systemFont(ofSize: 14, weight: .regular)
+            ]
+        )
+        attributedText.append(labelText)
         
-        return displayText
+        return attributedText
     }
     
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {

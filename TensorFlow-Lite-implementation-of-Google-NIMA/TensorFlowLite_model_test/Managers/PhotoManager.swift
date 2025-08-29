@@ -206,7 +206,8 @@ actor PhotoManager {
         
         // Process in smaller batches with timeout
         let batchSize = 20 // Reduced batch size
-        var allPhotos: [SelectedPhoto] = []
+        var allPhotos: [SelectedPhoto?] = Array(repeating: nil, count: assetsArray.count)
+        var successfullyProcessed = 0
         
         // Process each batch sequentially
         for batch in stride(from: 0, to: assetsArray.count, by: batchSize) {
@@ -218,6 +219,7 @@ actor PhotoManager {
             
             // Process photos in this batch sequentially
             for (index, asset) in batchAssets.enumerated() {
+                let globalIndex = batch + index
                 print("Batch \(batchNumber): Processing photo \(index + 1)/\(batchAssets.count)")
                 
                 if let photo = await processPhoto(
@@ -225,16 +227,19 @@ actor PhotoManager {
                     totalCount: assets.count,
                     state: state
                 ) {
-                    allPhotos.append(photo)
+                    allPhotos[globalIndex] = photo
+                    successfullyProcessed += 1
                     print("Batch \(batchNumber): Successfully processed photo \(index + 1)/\(batchAssets.count)")
                 }
             }
             
-            print("Batch \(batchNumber) completed. Processed \(end) of \(assetsArray.count) photos. Successfully processed: \(allPhotos.count)")
+            print("Batch \(batchNumber) completed. Processed \(end) of \(assetsArray.count) photos. Successfully processed: \(successfullyProcessed)")
         }
         
-        print("All photos processed. Total selected: \(allPhotos.count)")
-        return allPhotos
+        // Filter out nil values while preserving order
+        let finalPhotos = allPhotos.compactMap { $0 }
+        print("All photos processed. Total selected: \(finalPhotos.count)")
+        return finalPhotos
     }
     
     private func processPhoto(

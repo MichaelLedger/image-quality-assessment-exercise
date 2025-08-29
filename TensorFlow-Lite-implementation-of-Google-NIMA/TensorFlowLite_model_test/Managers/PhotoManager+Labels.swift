@@ -78,34 +78,34 @@ extension PhotoManager {
         
         let labelSet = Set(label.split(separator: "/").map(String.init))
         
+        let actorExcludedLabels = await PhotoManager.shared.excludedLabels
+        
         // NOTE: exclude first!!! (e.g. document/screenshot/people)
         if excludedLabels == nil {
             // Check if any label is excluded
-            let actorExcludedLabels = await PhotoManager.shared.excludedLabels
-            if !actorExcludedLabels.isEmpty {
-                return labelSet.isDisjoint(with: actorExcludedLabels)
+            if !actorExcludedLabels.isEmpty, !labelSet.isDisjoint(with: actorExcludedLabels) {
+                return false
             }
         } else {
             // Check if any label is excluded
-            if let excludedLabels, !excludedLabels.isEmpty {
-                return labelSet.isDisjoint(with: excludedLabels)
+            if let excludedLabels, !excludedLabels.isEmpty, !labelSet.isDisjoint(with: excludedLabels) {
+                return false
             }
         }
         
         if requiredLabels == nil {
             // Check if the photo has at least one required label
             let actorRequiredLabels = await PhotoManager.shared.requiredLabels
-            if !actorRequiredLabels.isEmpty {
-                return !labelSet.isDisjoint(with: actorRequiredLabels)
+            if !actorRequiredLabels.isEmpty, !labelSet.isDisjoint(with: actorRequiredLabels) {
+                return true
             }
         } else {
             // Check if the photo has at least one required label
-            if let requiredLabels, !requiredLabels.isEmpty {
-                return !labelSet.isDisjoint(with: requiredLabels)
+            if let requiredLabels, !requiredLabels.isEmpty, !labelSet.isDisjoint(with: requiredLabels) {
+                return true
             }
         }
-        
-        if let requiredLabels, requiredLabels.isEmpty {
+        if (requiredLabels == nil || requiredLabels!.isEmpty) && (actorExcludedLabels.isEmpty) {
             return true
         } else {
             return false
